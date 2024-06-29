@@ -49,3 +49,7 @@ Source files:
 * Utils.cpp
 
 
+## DevNotes
+
+Next step (29/6/24):
+*	Complex object rendering, Saving and retrieving from cache (conditional on cache param in scenario specified). Support for circle only is fine
