@@ -123,9 +123,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     //6. Flatten the complex objects and store all objects in a single struct
 
-    shared_ptr<Particles> particles(new Particles);
-
-    particles = flatten_complex_objs(requested_objects);
+    shared_ptr<Particles> particles = flatten_objs(requested_objects);
 
     //7. Return the particles struct
     
@@ -136,7 +134,9 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
 }
 
-shared_ptr<Particles> ObjHandler::flatten_complex_objs(shared_ptr<objects> requested_objects) {
+
+
+shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_objects) {
     //This function will flatten the complex objects in the requested_objects list and store all objects in a single struct.
 
     //create a Particles struct to store the flattened objects as particles
@@ -151,24 +151,13 @@ shared_ptr<Particles> ObjHandler::flatten_complex_objs(shared_ptr<objects> reque
 
         
         if (object->complexity == "simple") {
-            //store the object in the particles struct
-            unique_ptr<Particle> particle(new Particle);
+            
+            
 
-            particle -> particle_id = particles_loaded;
-            particle->r = object->r;
-            particle->g = object->g;
-            particle->b = object->b;
-            particle->x = object->x;
-            particle->y = object->y;
-            particle->z = object->z;
-            particle->vx = object->vx;
-            particle->vy = object->vy;
-            particle->vz = object->vz;
-            particle->m = object->m;
-            particle->rad = object->rad;
-            particle->rest = object->rest;
+            unique_ptr<Particle> particle = flatten_simple_obj(particles_loaded, object);
+            
 
-            particles->particle_list.push_back(move(particle));
+            particles -> particle_list.push_back(move(particle));
         } else {
             //flatten the complex object and store the particles in the particles struct
             
@@ -188,6 +177,43 @@ shared_ptr<Particles> ObjHandler::flatten_complex_objs(shared_ptr<objects> reque
 
 }
 
+
+
+unique_ptr<Particle> ObjHandler::flatten_simple_obj(int particles_loaded, shared_ptr<object> simple_object) {
+    //This function will flatten a simple object and store it in a Particles struct
+
+    //store the object in the particles struct
+            unique_ptr<Particle> particle(new Particle);
+
+            particle -> particle_id = particles_loaded;
+            particle->r = simple_object->r;
+            particle->g = simple_object->g;
+            particle->b = simple_object->b;
+            particle->x = simple_object->x;
+            particle->y = simple_object->y;
+            particle->z = simple_object->z;
+            particle->vx = simple_object->vx;
+            particle->vy = simple_object->vy;
+            particle->vz = simple_object->vz;
+            particle->m = simple_object->m;
+            particle->rad = simple_object->rad;
+            particle->rest = simple_object->rest;
+
+            return particle;
+
+}
+
+
+shared_ptr<Particles> ObjHandler::flatten_complex_obj(shared_ptr<objects> requested_objects) {
+    //This function will flatten a complex object and store it in a Particles struct
+
+    //create a Particles struct to store the flattened objects as particles
+
+    //loop through the requested_objects list and if the object is complex, flatten it and store the particles in the particles struct, else store the object in the particles struct
+
+    return nullptr;
+
+}
 
 double ObjHandler::safe_stod(string str) {
     // Function to safely convert string to double, defaulting to 0.0 if empty or non-convertible
