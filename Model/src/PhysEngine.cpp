@@ -95,8 +95,8 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
 
     //2. resolve gravitational attraction
 
-    cout << "Resolving gravity..." << endl;
-    resolve_gravity(particles);
+    //cout << "Resolving gravity..." << endl;
+    //resolve_gravity(particles);
 
     //3. update locations with velocities
 
@@ -120,12 +120,15 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
 
     //2.check for collissions between particles and resolve them
 
+
+
     for (int i = 0; i < particles->particle_list.size(); i++) {
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
             //2a. check for collission between particle i and particle j
 
             bool collission = check_collission(particles->particle_list[i], particles->particle_list[j]);
             //if collission detected, backtrack the particles to the point of collission and store the amount of time of the timestep that was left
+            
             
             if (collission) {
                 //2b. backtrack the particles
@@ -135,12 +138,14 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
 
                 scaler->scaler[i] = scaler_i;
 
+                //2d. resolve the collission
+
+                resolve_collission(particles->particle_list[i], particles->particle_list[j]);
+
                 
             }
             
-            //3b. resolve the collission
 
-            resolve_collission(particles->particle_list[i], particles->particle_list[j]);
         }
     }
 
@@ -240,7 +245,7 @@ void Engine::resolve_gravity(shared_ptr<Particles> particles) {
                 //1d. update the velocity of the particle
                 particles->particle_list[i]->vx += fx / particles->particle_list[i]->m;
                 particles->particle_list[i]->vy += fy / particles->particle_list[i]->m;
-                particles->particle_list[i]->vz += fz / particles->particle_list[i]->m;
+                //particles->particle_list[i]->vz += fz / particles->particle_list[i]->m;
             }
         }
     }
@@ -254,7 +259,7 @@ void Engine::update_locations(shared_ptr<Particles> particles, shared_ptr<backed
         
         particles->particle_list[i]->x += particles->particle_list[i]->vx * scaler->scaler[i];
         particles->particle_list[i]->y += particles->particle_list[i]->vy * scaler->scaler[i];
-        particles->particle_list[i]->z += particles->particle_list[i]->vz * scaler->scaler[i];
+        //particles->particle_list[i]->z += particles->particle_list[i]->vz * scaler->scaler[i];
     }
 }
 
