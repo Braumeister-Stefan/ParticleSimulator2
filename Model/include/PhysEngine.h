@@ -25,7 +25,7 @@ public:
     //Functions to resolve collissions between particles
     shared_ptr<backed_scaler> resolve_collisions(shared_ptr<Particles> particles);
 
-    int backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    double backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
     void resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
     bool check_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
 

@@ -125,6 +125,8 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     shared_ptr<Particles> particles = flatten_objs(requested_objects);
 
+    //to implement, remove overlapping particles
+
     //7. Return the particles struct
     
 

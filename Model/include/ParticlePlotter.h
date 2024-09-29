@@ -25,7 +25,13 @@ public:
     void plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_t> metrics_t);
     void close_GNU();
 
+
+
+
     //convert r,g,b to hex for all particles
+    //functions to convert rgb values to hex code
+    int intensity_to_rgb(double r, double g, double b);
+
     shared_ptr<Particles> convert_intensity_to_rgb(shared_ptr<Particles> particles);
 
 private:

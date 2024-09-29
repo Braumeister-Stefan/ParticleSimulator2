@@ -1,6 +1,5 @@
 #include "../include/ParticlePlotter.h"
 #include "../include/InitStructs.h"
-#include "../include/Utils.h"
 #include <memory> // Add this line to include the necessary header for shared_ptr
 #include <iostream>
 #include <windows.h>
@@ -87,6 +86,14 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     fprintf(gnuplotPipe, "set yrange [-100:100]\n");
     //fprintf(gnuplotPipe, "set zrange [-100:100]\n");
 
+    //set aspect ratio
+    fprintf(gnuplotPipe, "set size ratio -1\n");
+
+    //ensure objects are filled
+    fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
+
+
+    
 
     fflush(gnuplotPipe);
 
@@ -104,7 +111,7 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     //2. plot the particles
 
-    fprintf(gnuplotPipe, "plot '-' with points pt 7 ps variable lc rgb variable\n");
+    fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable\n");
     for (int i = 0; i < particles->particle_list.size(); i++) {
 
         //set radius of the point using the rad field
@@ -135,6 +142,24 @@ void Plotter::close_GNU() {
         pclose(gnuplotPipe);
         gnuplotPipe = nullptr;
     }
+}
+
+
+int Plotter::intensity_to_rgb(double r, double g, double b) {
+    //this function will convert the rgb values to a hex code
+
+    //1. convert the intensity values to 255 base
+
+    int r255 = r * 255;
+    int g255 = g * 255;
+    int b255 = b * 255;
+
+    //2. combine the rgb  
+
+    int rgb = (r255 << 16) | (g255 << 8) | (b255);
+
+    return rgb;
+
 }
 
 

@@ -1,10 +1,12 @@
 #include "../include/PhysEngine.h"
 #include "../include/InitStructs.h"
+#include "../include/MathUtils.h"
 
 #include <memory>
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 
 
 
@@ -88,6 +90,8 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
     //this function will update the particles in the particles object
 
     
+
+    
     //1 resolve collissions
 
     cout << "Resolving collissions..." << endl;
@@ -95,8 +99,10 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
 
     //2. resolve gravitational attraction
 
-    //cout << "Resolving gravity..." << endl;
-    //resolve_gravity(particles);
+    cout << "Resolving gravity..." << endl;
+    resolve_gravity(particles);
+
+    
 
     //3. update locations with velocities
 
@@ -121,7 +127,6 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
     //2.check for collissions between particles and resolve them
 
 
-
     for (int i = 0; i < particles->particle_list.size(); i++) {
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
             //2a. check for collission between particle i and particle j
@@ -130,9 +135,10 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
             //if collission detected, backtrack the particles to the point of collission and store the amount of time of the timestep that was left
             
             
+
             if (collission) {
                 //2b. backtrack the particles
-                 int scaler_i = backtrack_pair(particles->particle_list[i], particles->particle_list[j]);
+                 double scaler_i = backtrack_pair(particles->particle_list[i], particles->particle_list[j]);
 
                 //2c. store the scaler for the particle
 
@@ -169,58 +175,102 @@ bool Engine::check_collission(shared_ptr<Particle> particle1, shared_ptr<Particl
     }
 }
 
-int Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
-    //this function will backtrack two particles to the point of collission
 
-    //1. calculate the distance between the particles
-    double distance = sqrt(pow(particle1->x - particle2->x, 2) + pow(particle1->y - particle2->y, 2) + pow(particle1->z - particle2->z, 2));
+double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
+    // Define the dot product function locally within this function
+    
 
-    //2. calculate the time of the timestep that was left
-    double time_left = (particle1->rad + particle2->rad - distance) / (particle1->vx + particle2->vx + particle1->vy + particle2->vy + particle1->vz + particle2->vz);
+    // This function will backtrack two particles to the point of collision
+    // and return the amount of time of the timestep that was left.
 
-    //3. backtrack the particles
-    particle1->x -= particle1->vx * time_left;
-    particle1->y -= particle1->vy * time_left;
-    particle1->z -= particle1->vz * time_left;
+    // 1. Store particle positions and velocities in 2D
+    Vector2D pos1 = { particle1->x, particle1->y };
+    Vector2D pos2 = { particle2->x, particle2->y };
+    Vector2D vel1 = { particle1->vx, particle1->vy };
+    Vector2D vel2 = { particle2->vx, particle2->vy };
 
-    particle2->x -= particle2->vx * time_left;
-    particle2->y -= particle2->vy * time_left;
-    particle2->z -= particle2->vz * time_left;
+    // 2. Calculate relative velocity and position difference
+    Vector2D rel_pos = pos2 - pos1;
+    Vector2D rel_vel = vel2 - vel1;
 
-    return time_left;
+    // 3. Calculate quadratic terms for collision detection
+    double a = dot(rel_vel, rel_vel);  // Coefficient of t^2
+    double b = 2 * dot(rel_pos, rel_vel);  // Coefficient of t
+    double c = dot(rel_pos, rel_pos) - pow(particle1->rad + particle2->rad, 2);  // Constant term
+
+    // 4. Solve quadratic equation for time of collision
+    double discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) {
+        // No collision occurs
+        return 1.0;  // Full timestep remains
+    }
+
+    double sqrt_discriminant = sqrt(discriminant);
+    double t_collision1 = (-b - sqrt_discriminant) / (2 * a);
+    double t_collision2 = (-b + sqrt_discriminant) / (2 * a);
+
+    // Use the root that falls within the current timestep 
+    double t_collision = 0;
+    if (t_collision1 >= -1 && t_collision1 <= 0) {
+        t_collision = t_collision1;
+    } else if (t_collision2 >= -1 && t_collision2 <= 0) {
+        t_collision = t_collision2;
+    }
+
+
+
+    // 5. Backtrack positions to collision point
+    pos1 = pos1 + t_collision * vel1;
+    pos2 = pos2 + t_collision * vel2;
+
+    // 6. Calculate the time scaler
+    double time_scaler = 1.0 - t_collision;  // Remaining time in the timestep
+
+    return time_scaler;
 }
 
+
+
+
+
 void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
-    //this function will resolve the collission between two particles
+    // This function will resolve the collision between two particles
 
-    //1. calculate the distance between the particles
-    double distance = sqrt(pow(particle1->x - particle2->x, 2) + pow(particle1->y - particle2->y, 2) + pow(particle1->z - particle2->z, 2));
+    // Calculate the normal vector
+    Vector2D normal = { particle2->x - particle1->x, particle2->y - particle1->y };
+    double distance = sqrt(normal.x * normal.x + normal.y * normal.y);
+    normal.x /= distance;
+    normal.y /= distance;
 
-    //2. calculate the normal vector of the collission
-    double nx = (particle2->x - particle1->x) / distance;
-    double ny = (particle2->y - particle1->y) / distance;
-    double nz = (particle2->z - particle1->z) / distance;
+    // Calculate the tangential vector
+    Vector2D tangent = { -normal.y, normal.x };
 
-    //3. calculate the relative velocity of the particles
-    double vrelx = particle2->vx - particle1->vx;
-    double vrely = particle2->vy - particle1->vy;
-    double vrelz = particle2->vz - particle1->vz;
+    // Decompose velocities into normal and tangential components
+    double v1n = normal.x * particle1->vx + normal.y * particle1->vy;
+    double v1t = tangent.x * particle1->vx + tangent.y * particle1->vy;
+    double v2n = normal.x * particle2->vx + normal.y * particle2->vy;
+    double v2t = tangent.x * particle2->vx + tangent.y * particle2->vy;
 
-    //4. calculate the dot product of the relative velocity and the normal vector
-    double dot = vrelx * nx + vrely * ny + vrelz * nz;
+    // Calculate new normal velocities using conservation of momentum and kinetic energy
+    double v1n_new = (v1n * (particle1->m - particle2->m) + (1 + particle1->rest) * particle2->m * v2n) / (particle1->m + particle2->m);
+    double v2n_new = (v2n * (particle2->m - particle1->m) + (1 + particle2->rest) * particle1->m * v1n) / (particle1->m + particle2->m);
 
-    //5. calculate the impulse
-    double impulse = 2 * dot / (1 / particle1->m + 1 / particle2->m);
+    // The tangential components remain unchanged
+    double v1t_new = v1t;
+    double v2t_new = v2t;
 
-    //6. update the velocities of the particles
-    particle1->vx += impulse / particle1->m * nx;
-    particle1->vy += impulse / particle1->m * ny;
-    particle1->vz += impulse / particle1->m * nz;
+    // Convert the scalar normal and tangential velocities into vectors
+    Vector2D v1n_vec = { v1n_new * normal.x, v1n_new * normal.y };
+    Vector2D v1t_vec = { v1t_new * tangent.x, v1t_new * tangent.y };
+    Vector2D v2n_vec = { v2n_new * normal.x, v2n_new * normal.y };
+    Vector2D v2t_vec = { v2t_new * tangent.x, v2t_new * tangent.y };
 
-    particle2->vx -= impulse / particle2->m * nx;
-    particle2->vy -= impulse / particle2->m * ny;
-    particle2->vz -= impulse / particle2->m * nz;
-
+    // Update the velocities of the particles
+    particle1->vx = v1n_vec.x + v1t_vec.x;
+    particle1->vy = v1n_vec.y + v1t_vec.y;
+    particle2->vx = v2n_vec.x + v2t_vec.x;
+    particle2->vy = v2n_vec.y + v2t_vec.y;
 }
 
 
