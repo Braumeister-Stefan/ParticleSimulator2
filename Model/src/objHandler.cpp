@@ -1,5 +1,6 @@
 #include "../include/ObjHandler.h"
 #include "../include/InitStructs.h"
+#include "../include/MathUtils.h"
 #define CSV_IO_NO_THREAD
 #include "../include/3party/csv.h"
 #include "../include/Particles.h"
@@ -7,6 +8,13 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <cmath>
+
+//to use pi
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 
 //namespaces
 using namespace std;
@@ -125,9 +133,11 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     shared_ptr<Particles> particles = flatten_objs(requested_objects);
 
-    //to implement, remove overlapping particles
+    //7. Remove overlapping particles
 
-    //7. Return the particles struct
+    remove_overlaps(particles);
+
+    //8. Return the particles struct
     
 
     return particles;
@@ -163,7 +173,7 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
         } else {
             //flatten the complex object and store the particles in the particles struct
             
-            //TO BE IMPLEMENTED
+           shared_ptr<Particles> particles = flatten_complex_obj(requested_objects);
         }
 
         particles_loaded++;
@@ -178,6 +188,7 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
 
 
 }
+
 
 
 
@@ -209,12 +220,135 @@ unique_ptr<Particle> ObjHandler::flatten_simple_obj(int particles_loaded, shared
 shared_ptr<Particles> ObjHandler::flatten_complex_obj(shared_ptr<objects> requested_objects) {
     //This function will flatten a complex object and store it in a Particles struct
 
+    //1. create a Particles struct to store the flattened objects as particles
+    shared_ptr<Particles> unfolded_particles(new Particles);
+
+    //2 If complex flag is"circle", call flatten_complex_circle
+
+    for (auto &object : requested_objects->object_list) {
+        //3. flatten the complex object
+
+        shared_ptr<Particles> particles_obj;
+
+        if (object->complexity == "CIRCLE") {
+            
+            shared_ptr<Particles> particles_obj = flatten_complex_circle(object);
+      
+        } else {
+
+            cout << "Complex object is a " << object->complexity << ". This shape is not supported." << endl;
+            continue;
+        }
+
+        
+
+        cout << "Object " << object->name << " flattened into " << particles_obj->particle_list.size() << " particles." << endl;
+        
+        unfolded_particles->particle_list.insert(unfolded_particles->particle_list.end(), particles_obj->particle_list.begin(), particles_obj->particle_list.end());
+    }
+
+    
+
+}
+
+shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> complex_object) {
+    //This function will flatten a complex circle object and store it in a Particles struct
+
     //create a Particles struct to store the flattened objects as particles
+    shared_ptr<Particles> particles(new Particles);
 
-    //loop through the requested_objects list and if the object is complex, flatten it and store the particles in the particles struct, else store the object in the particles struct
+    //1. retrieve complexity parameters
 
-    return nullptr;
+    double circle_rad = complex_object->complexity_size;
+    int complexity_n = complex_object->complexity_n;
+    Vector2D center = { complex_object->x, complex_object->y };
 
+
+    //loop through n*3 times the complexity_n and sample random points within the circle radius (defined by complexity_size)
+    for (int i = 0; i < 3*complexity_n; i++) {
+        
+        //store the sampled point in a particle struct and add it to the particles struct
+        unique_ptr<Particle> particle(new Particle);
+        
+        //sample a random point within the circle radius using the above formula
+
+        Vector2D sample_point = sample_in_circle(center, circle_rad);
+
+
+        particle->particle_id = i;
+        particle->r = complex_object->r;
+        particle->g = complex_object->g;
+        particle->b = complex_object->b;
+        particle->x = sample_point.x;
+        particle->y = sample_point.y;
+        //particle->z = complex_object->z;
+        particle->vx = complex_object->vx;
+        particle->vy = complex_object->vy;
+        particle->vz = complex_object->vz;
+        particle->rad = complex_object->rad;
+        particle->rest = complex_object->rest;
+
+
+        particles->particle_list.push_back(move(particle));
+    }
+
+    //remove overlapping particles
+    
+    remove_overlaps(particles);
+
+    //set mass equal to complex_object mass divided by size of particles
+    double m_i = complex_object->m / particles->particle_list.size();
+
+    for (int i = 0; i < particles->particle_list.size(); i++) {
+        particles->particle_list[i]->m = m_i;
+    }
+
+    
+
+    return particles;
+
+}
+
+
+
+
+void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
+    //This function will remove all overlapping particles in a particles struct
+
+    //loop through the particles struct and check for overlapping particles. If particles overlap, remove the particle with the smaller mass
+
+    int removed_overlaps = 0;
+    for (int i = 0; i < particles->particle_list.size(); i++) {
+        for (int j = i + 1; j < particles->particle_list.size(); j++) {
+            //remove the particle with the smaller mass
+            removed_overlaps += remove_overlap(particles->particle_list[i], particles->particle_list[j]);
+
+        }
+    }
+
+    cout << "Removed " << removed_overlaps << " overlapping particles." << endl;
+           
+}
+
+int ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
+    //This function will remove the particle with the smaller mass if two particles overlap
+
+    //1. calculate the distance between the particles
+    double distance = sqrt(pow(particle1->x - particle2->x, 2) + pow(particle1->y - particle2->y, 2) + pow(particle1->z - particle2->z, 2));
+
+    //2. check if the distance is smaller than the sum of the radii of the particles
+    if (distance < particle1->rad + particle2->rad) {
+        //3. remove the particle with the smaller mass
+        if (particle1->m < particle2->m) {
+            particle1.reset();
+        } else {
+            particle2.reset();
+        }
+
+        return 1;
+    }
+
+    return 0;
 }
 
 double ObjHandler::safe_stod(string str) {
