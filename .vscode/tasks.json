@@ -16,7 +16,6 @@
 				"Model/src/PhysMetrics.cpp",
 				"Model/src/ParticlePlotter.cpp",
 				"Model/src/ObjHandler.cpp",
-				"Model/src/ParticleDumper.cpp",
 				"Model/src/MathUtils.cpp",
 				"-o",
 				"${workspaceFolder}/ParticleSimulator2.exe"

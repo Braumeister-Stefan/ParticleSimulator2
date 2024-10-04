@@ -20,11 +20,19 @@ using namespace std;
 
 Vector2D sample_in_circle(Vector2D center, double radius) {
     //This function will sample a random point within a circle of a given radius
-    double angle = 2 * M_PI * rand() / RAND_MAX;
-    double distance = radius * sqrt(rand() / RAND_MAX);
+    
+    //sample from a uniform distribution a random angle between 0 and 2*pi and a random radius between 0 and the circle radius
+    double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
+    double r = radius * sqrt(rand() / (double)RAND_MAX);
+
+    //initialize the point struct
+
     Vector2D point;
-    point.x = center.x + distance * cos(angle);
-    point.y = center.y + distance * sin(angle);
+
+    //calculate the x and y coordinates of the sampled point
+    point.x = center.x + r * cos(angle);
+    point.y = center.y + r * sin(angle);
+    
     return point;
 }
 

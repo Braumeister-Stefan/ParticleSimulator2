@@ -37,14 +37,11 @@ public:
     //Function to update the locations of the particles
     void update_locations(shared_ptr<Particles> particles, shared_ptr<backed_scaler> scaler);
 
+    //Function to interact with cache
+    void run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> snapshots);
+    bool cache_exists(shared_ptr<scenario> scenario);
+    shared_ptr<snapshots> run_from_cache(shared_ptr<scenario> scenario);
     
-
-
-
-    
-
-private:
-    // Add private member variables if needed
 };
 
 #endif

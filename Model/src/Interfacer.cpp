@@ -6,17 +6,26 @@
 #include <fstream>
 #include <memory>
 
+
+
 //namespaces
 using namespace std;
 
 // Constructor
 Interfacer::Interfacer() {
+
     cout << "Interfacer initialized." << endl;
-}
+} 
 
 // Destructor
 Interfacer::~Interfacer() {
     cout << "Interfacer destroyed." << endl;
+}
+
+void Interfacer::setup_console_window() {
+    //This function will set up the console window to be displayed on the left third of the screen. WIP
+
+
 }
 
 
@@ -24,6 +33,7 @@ Interfacer::~Interfacer() {
 // Methods for interfacing with the code
 shared_ptr<scenario> Interfacer::select_scenario() {
     //This function will load the list of scenarios and allow the user to select one. It will report the details of the selected scenario.
+    setup_console_window();
 
     cout << "The following scenarios are available:" << endl;
 
@@ -94,6 +104,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     for (int i = 0; i < scenario_list.scenario_list.size(); i++) {
         cout << scenario_list.scenario_list[i] -> scenario_id << ". " << scenario_list.scenario_list[i] -> name << endl;
     }
+    cout << endl;
 
     //5. Ask the user to select a scenario by entering the scenario_id. Store the selected scenario_id in a variable.
 
@@ -102,6 +113,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     cout << "Please enter the scenario ID of the scenario you would like to select: ";
 
     cin >> selected_scenario_id;
+    cout << endl;
 
     //6. Print the details of the selected scenario to the console.
 
@@ -118,6 +130,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
             cout << "3D: " << scenario_list.scenario_list[i]->three_d << endl;
         }
     }
+    cout << endl;
 
     
 
@@ -127,9 +140,9 @@ shared_ptr<scenario> Interfacer::select_scenario() {
 
 
     //ask the user to press enter to continue
-    cout << "Press enter to continue." << endl;
-    cin.ignore();
-    cin.get();
+    //cout << "Press enter to continue." << endl;
+    //cin.ignore();
+    //cin.get();
 
     return selected_scenario;
 

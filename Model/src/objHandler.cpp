@@ -35,9 +35,6 @@ ObjHandler::~ObjHandler() {
 shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     //This function will load the list of objects for the selected scenario and flatten them into a single struct.
 
-    //1. Load the objects from the csv file 
-
-    cout << "The following objects are available:" << endl;
 
     //1. Retrieve the object_inputs from csv file
     string object_input_path = "Inputs/object_inputs.csv";
@@ -103,9 +100,9 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     //print object id and names to the user
 
-    for (int i = 0; i < object_list.object_list.size(); i++) {
-        cout << object_list.object_list[i]->object_id << ". " << object_list.object_list[i]->name << endl;
-    }
+    //for (int i = 0; i < object_list.object_list.size(); i++) {
+    //    cout << object_list.object_list[i]->object_id << ". " << object_list.object_list[i]->name << endl;
+    //}
 
 
     //4. Retrieve the objects from the object_list that are in the obj_list of the selected scenario
@@ -129,15 +126,19 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     
 
-    //6. Flatten the complex objects and store all objects in a single struct
+    //6. Flatten the objects and store all objects in a single struct
 
-    shared_ptr<Particles> particles = flatten_objs(requested_objects);
+    shared_ptr<Particles> particles = flatten_objs(requested_objects, scenario);
 
     //7. Remove overlapping particles
 
     remove_overlaps(particles);
 
-    //8. Return the particles struct
+    //8 Inform user of the number of particles loaded
+
+    cout << "Loaded " << particles->particle_list.size() << " particles." << endl;
+
+    //9. Return the particles struct
     
 
     return particles;
@@ -148,8 +149,8 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
 
 
-shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_objects) {
-    //This function will flatten the complex objects in the requested_objects list and store all objects in a single struct.
+shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_objects, shared_ptr<scenario> scenario) {
+    //This function will flatten the simple & complex objects in the requested_objects list and store all objects in a single struct.
 
     //create a Particles struct to store the flattened objects as particles
 
@@ -158,7 +159,7 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
     //loop through the requested_objects list and if the object is complex, flatten it and store the particles in the particles struct, else store the object in the particles struct
 
 
-    int particles_loaded = 1;
+    int particles_loaded = 0;
     for (auto &object : requested_objects->object_list) {
 
         
@@ -170,22 +171,45 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
             
 
             particles -> particle_list.push_back(move(particle));
+
+            particles_loaded++;
+
         } else {
             //flatten the complex object and store the particles in the particles struct
+            shared_ptr<Particles> complex_particles(new Particles);
+           
+            //if the refresh_obj flag is false, attempt to retrieve the particles from the cache
+            if (!scenario->refresh_obj) {
+
+                complex_particles = obj_from_cache(object->name);
+
+                if (complex_particles == nullptr) {
+                    complex_particles = flatten_complex_obj(object);
+                }
+                
+               
+            } else {
+
+                complex_particles = flatten_complex_obj(object);
+                
+            }
+
+            //add the particles to the particles struct
+            particles->particle_list.insert(particles->particle_list.end(), complex_particles->particle_list.begin(), complex_particles->particle_list.end());
             
-           shared_ptr<Particles> particles = flatten_complex_obj(requested_objects);
+
+           particles_loaded += particles->particle_list.size();
+
+            cout << "particle_list has size " << particles->particle_list.size() << endl;
+
         }
 
-        particles_loaded++;
+        
     }
 
     //return the particles struct
 
-    
-
     return particles;
-
-
 
 }
 
@@ -217,37 +241,38 @@ unique_ptr<Particle> ObjHandler::flatten_simple_obj(int particles_loaded, shared
 }
 
 
-shared_ptr<Particles> ObjHandler::flatten_complex_obj(shared_ptr<objects> requested_objects) {
+shared_ptr<Particles> ObjHandler::flatten_complex_obj(shared_ptr<object> requested_object) {
     //This function will flatten a complex object and store it in a Particles struct
 
-    //1. create a Particles struct to store the flattened objects as particles
+    //1. create a Particles struct to store the flattened object as particles
     shared_ptr<Particles> unfolded_particles(new Particles);
 
     //2 If complex flag is"circle", call flatten_complex_circle
 
-    for (auto &object : requested_objects->object_list) {
-        //3. flatten the complex object
 
-        shared_ptr<Particles> particles_obj;
-
-        if (object->complexity == "CIRCLE") {
+    if (requested_object->complexity == "CIRCLE") {
             
-            shared_ptr<Particles> particles_obj = flatten_complex_circle(object);
+        unfolded_particles = flatten_complex_circle(requested_object);
       
-        } else {
+    } else {
 
-            cout << "Complex object is a " << object->complexity << ". This shape is not supported." << endl;
-            continue;
-        }
-
+        cout << "Complex object is a " << requested_object->complexity << ". This shape is not supported." << endl;
         
-
-        cout << "Object " << object->name << " flattened into " << particles_obj->particle_list.size() << " particles." << endl;
-        
-        unfolded_particles->particle_list.insert(unfolded_particles->particle_list.end(), particles_obj->particle_list.begin(), particles_obj->particle_list.end());
     }
 
+        
+
+    cout << "Object " << requested_object->name << " flattened into " << unfolded_particles->particle_list.size() << " particles." << endl;
+
+    //3. Save the complex object to the cache
+
+    obj_to_cache(requested_object, unfolded_particles);
+
+
+        
     
+
+    return unfolded_particles;
 
 }
 
@@ -265,7 +290,7 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
 
     //loop through n*3 times the complexity_n and sample random points within the circle radius (defined by complexity_size)
-    for (int i = 0; i < 3*complexity_n; i++) {
+    for (int i = 0; i < 4*complexity_n; i++) {
         
         //store the sampled point in a particle struct and add it to the particles struct
         unique_ptr<Particle> particle(new Particle);
@@ -309,7 +334,130 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
 }
 
+shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
+    //This function will attempt to retrieve the particles from the cache
 
+    //1. check if the cache file exists at Inputs\rendered_objects\obj_name.csv
+
+    bool cache_exists = false;
+
+    string cache_path = "Inputs/rendered_objects/" + obj_name + ".csv";
+
+    ifstream cache_file(cache_path);
+
+    if (cache_file.good()) {
+        cache_exists = true;
+    }
+
+    //2. if the cache file exists, read the particles from the cache file and store them in a particles struct
+
+    if (cache_exists){
+
+        shared_ptr<Particles> particles(new Particles);
+
+        //create a csv reader object
+        typedef io::trim_chars<' ', '\t'> TrimPolicy;
+        typedef io::double_quote_escape<',', '\"'> QuotePolicy;
+
+        const int column_count = 16;
+
+        io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(cache_path);
+
+        //3. Read the contents of the csv file and store each row in a particle object. Store all particle objects in a vector.
+        string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16;
+
+        int particles_loaded = 1;
+
+        //discard the header row. This list is a guide to the columns in the csv file.
+        in.read_header(io::ignore_extra_column, "PARTICLE_ID", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
+
+        while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16)) {
+    
+
+            unique_ptr<Particle> new_particle(new Particle);
+
+            new_particle->particle_id = particles_loaded;
+
+            new_particle->r = safe_stod(col2);   
+            new_particle->g = safe_stod(col3);   
+            new_particle->b = safe_stod(col4);   
+            new_particle->x = safe_stod(col5);  
+            new_particle->y = safe_stod(col6);   
+            new_particle->z = safe_stod(col7);   
+            new_particle->vx = safe_stod(col8);  
+            new_particle->vy = safe_stod(col9);  
+            new_particle->vz = safe_stod(col10);
+            new_particle->m = safe_stod(col11);  
+            new_particle->rad = safe_stod(col12); 
+            new_particle->rest = safe_stod(col13);
+
+
+            //add the new particle to the list of particles
+            particles->particle_list.push_back(move(new_particle));
+
+            particles_loaded++;
+
+        }
+
+        return particles;
+
+
+
+
+
+    } else {
+        return nullptr;
+    }
+
+
+}
+
+void ObjHandler::obj_to_cache(shared_ptr<object> complex_object, shared_ptr<Particles> particles) {
+    // This function will attempt to save the particles to the cache
+
+    // 1. Define the cache file path
+    string cache_path = "Inputs/rendered_objects/" + complex_object->name + ".csv";
+
+    // 2. Open the cache file for writing
+    ofstream cache_file(cache_path);
+
+    if (!cache_file.is_open()) {
+        cout << "Object " << complex_object->name << " could not be saved to object cache." << endl;
+        return;
+    }
+
+    // 3. Write the header row
+    cache_file << "PARTICLE_ID,R,G,B,X,Y,Z,VX,VY,VZ,M,RAD,REST, COMPLEXITY, COMPLEXITY_SIZE, COMPLEXITY_N\n";
+
+    // 4. Write the particles to the cache file
+
+    //define complex object parameters
+    
+
+    for (const auto& particle : particles->particle_list) {
+        cache_file << particle->particle_id << ","
+                << particle->r << ","
+                << particle->g << ","
+                << particle->b << ","
+                << particle->x << ","
+                << particle->y << ","
+                << particle->z << ","
+                << particle->vx << ","
+                << particle->vy << ","
+                << particle->vz << ","
+                << particle->m << ","
+                << particle->rad << ","
+                << particle->rest << ","
+                << complex_object->complexity << ","
+                << complex_object->complexity_size << ","
+                << complex_object->complexity_n << "\n";
+    }
+
+    // 5. Close the cache file
+    cache_file.close();
+
+    cout << "Object " << complex_object->name << " saved to object cache." << endl;
+}
 
 
 void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
@@ -319,6 +467,7 @@ void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
 
     int removed_overlaps = 0;
     for (int i = 0; i < particles->particle_list.size(); i++) {
+
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
             //remove the particle with the smaller mass
             removed_overlaps += remove_overlap(particles->particle_list[i], particles->particle_list[j]);
@@ -326,12 +475,21 @@ void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
         }
     }
 
+
+    //remove the null particles from the particles struct
+    particles->particle_list.erase(remove_if(particles->particle_list.begin(), particles->particle_list.end(), [](shared_ptr<Particle> particle) { return particle == nullptr; }), particles->particle_list.end());
+
     cout << "Removed " << removed_overlaps << " overlapping particles." << endl;
            
 }
 
-int ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
+int ObjHandler::remove_overlap(shared_ptr<Particle>& particle1, shared_ptr<Particle>& particle2) {
     //This function will remove the particle with the smaller mass if two particles overlap
+
+    //check if either of the particles is null
+    if (particle1 == nullptr || particle2 == nullptr) {
+        return 0;
+    }
 
     //1. calculate the distance between the particles
     double distance = sqrt(pow(particle1->x - particle2->x, 2) + pow(particle1->y - particle2->y, 2) + pow(particle1->z - particle2->z, 2));
@@ -340,9 +498,13 @@ int ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Partic
     if (distance < particle1->rad + particle2->rad) {
         //3. remove the particle with the smaller mass
         if (particle1->m < particle2->m) {
+
+            //make particle1 null
             particle1.reset();
         } else {
+            //make particle2 null
             particle2.reset();
+            
         }
 
         return 1;

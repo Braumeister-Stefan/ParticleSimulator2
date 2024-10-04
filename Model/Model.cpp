@@ -9,7 +9,7 @@ ParticleModel::ParticleModel() {
     unique_ptr<Metrics> metrics;
     unique_ptr<Plotter> plotter;
     unique_ptr<ObjHandler> obj_handler;
-    unique_ptr<ParticleDumper> dumper;
+    
 
 }
 

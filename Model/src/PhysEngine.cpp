@@ -1,12 +1,20 @@
 #include "../include/PhysEngine.h"
 #include "../include/InitStructs.h"
 #include "../include/MathUtils.h"
+#define CSV_IO_NO_THREAD
+#include "../include/3party/csv.h"
 
 #include <memory>
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <string>
+#include <iostream>
+
+
+
 
 
 
@@ -27,63 +35,58 @@ Engine::~Engine() {
 shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles) {
     cout << "Engine is initialized." << endl;
 
-    //0. initialize the snapshots object
+    //1. initialize the snapshots object
     shared_ptr<snapshots> particle_states = make_shared<snapshots>();
 
 
-    //confirm that the run should start. If a dump file is available, ask the user if they want to use it, if yes save to snapshots object and return it.
-    //to be implemented
+    //2.confirm that the run should start. If a dump file is available, ask the user if they want to use it, if yes save to snapshots object and return it.
 
 
-    cout << scenario->name << " is ready to start" << endl << endl;
-    cout << "Press enter to continue." << endl;
+    cout << scenario->name << "'s initial states loaded" << endl << endl;
+    cout << "Press enter to start the simulation." << endl;
     cin.ignore();
     cin.get();
 
 
 
 
-    //loop through the steps as defined in the scenario, do nothing for now
+    //3.loop through the steps as defined in the scenario, do nothing for now
 
     for (int i = 0; i < scenario->steps; i++) {
 
-        cout << "Starting step " << i << "..." << endl;
-
         //1.add current state of particles to the snapshots object
         auto particles_copy = make_unique<Particles>(*particles);
-
-        cout << "Continuing step " << i << "..." << endl;
 
         particle_states->snaps.push_back(move(particles_copy));
         //if instead we want to add it to the first element of the snapshots object, we can use the following line
 
         //2. Update the state of the particles
 
-        cout << "Updating particles..." << endl;
+        //cout << "Updating particles..." << endl;
         
         update_particles(particles);
 
-        cout << "Step " << i << " completed." << endl;
+        //print every 5% of the simulation
+        if (i % (scenario->steps / 20) == 0) {
+            cout << i / (scenario->steps / 100) << "% of the simulation complete." << endl;
+        }
 
     }
 
     //confirm that the run has ended
 
-    cout << scenario->name << " simulation completed." << endl;
+    cout << scenario->name << " simulation completed." << endl << endl;
 
-    //save down snapshots to the csv using the dumper
-    //dumper->dump_snapshots(snapshots); TO BE IMPLEMENTED
+    //4. save down snapshots to the csv 
+
+    run_to_cache(scenario, particle_states);
 
     return particle_states;
 
 
 }
 
-//update particles steps to be implemented
 
-//2) debug the code
-
-//3) make complex object (circle)
 
 
 void Engine::update_particles(shared_ptr<Particles> particles) {
@@ -94,19 +97,19 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
     
     //1 resolve collissions
 
-    cout << "Resolving collissions..." << endl;
+    //cout << "Resolving collissions..." << endl;
     shared_ptr<backed_scaler> scaler = resolve_collisions(particles);
 
     //2. resolve gravitational attraction
 
-    cout << "Resolving gravity..." << endl;
+    //cout << "Resolving gravity..." << endl;
     resolve_gravity(particles);
 
     
 
     //3. update locations with velocities
 
-    cout << "Updating locations..." << endl;
+    //cout << "Updating locations..." << endl;
     update_locations(particles, scaler);
 
 
@@ -122,7 +125,7 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
         scaler->scaler.push_back(1);
     }
 
-    cout <<"Scalers initialized." << endl;
+    //cout <<"Scalers initialized." << endl;
 
     //2.check for collissions between particles and resolve them
 
@@ -232,8 +235,6 @@ double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particl
 
 
 
-
-
 void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
     // This function will resolve the collision between two particles
 
@@ -313,3 +314,133 @@ void Engine::update_locations(shared_ptr<Particles> particles, shared_ptr<backed
     }
 }
 
+void Engine::run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states) {
+    //this function will save the snapshots to a csv file
+
+    //1. define the file name, located on Inputs\rendered_scenarios
+
+    string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
+
+    //2. open the file
+
+    ofstream file(file_name);
+
+    //check if the file is open
+
+    if (!file.is_open()) {
+        cout << "Failed to write snapshots to cache!" << endl;
+        return;
+    }
+
+    //3. write headers
+
+    file << "step_id, particle_id,r,g,b,x,y,z,vx,vy,vz,m,rad,rest" << endl;
+
+    //4. loop through the snapshots and write the data to the file, adding the step_id
+
+    for (int i = 0; i < particle_states->snaps.size(); i++) {
+        for (int j = 0; j < particle_states->snaps[i]->particle_list.size(); j++) {
+            file << i << "," << particle_states->snaps[i]->particle_list[j]->particle_id << "," << particle_states->snaps[i]->particle_list[j]->r << "," << particle_states->snaps[i]->particle_list[j]->g << "," << particle_states->snaps[i]->particle_list[j]->b << "," << particle_states->snaps[i]->particle_list[j]->x << "," << particle_states->snaps[i]->particle_list[j]->y << "," << particle_states->snaps[i]->particle_list[j]->z << "," << particle_states->snaps[i]->particle_list[j]->vx << "," << particle_states->snaps[i]->particle_list[j]->vy << "," << particle_states->snaps[i]->particle_list[j]->vz << "," << particle_states->snaps[i]->particle_list[j]->m << "," << particle_states->snaps[i]->particle_list[j]->rad << "," << particle_states->snaps[i]->particle_list[j]->rest << endl;
+        }
+    }
+
+    //5. save and close the file
+
+    file.close();
+
+    cout << "Snapshots saved to " << file_name << endl;
+    
+
+}
+
+bool Engine::cache_exists(shared_ptr<scenario> scenario) {
+    //this function will check if a cache file exists for the scenario
+
+    //1. define the file name, located on Inputs\rendered_scenarios
+
+    string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
+
+    //2. open the file
+
+    ifstream file(file_name);
+
+    //check if the file is open
+
+    if (!file.is_open()) {
+        return false;
+    }
+
+    cout << "Cache file found for " << scenario->name << endl;
+
+    return true;
+}
+
+shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
+
+    //this function will read the snapshots from a csv file
+
+    //1. define the file name, located on Inputs\rendered_scenarios
+
+    string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
+
+    //2. open the file
+
+    ifstream file(file_name);
+
+    //3. read the file, using the first column to determine the step_id, store every step in a new snapshot
+
+    shared_ptr<snapshots> particle_states = make_shared<snapshots>();
+
+    // Create a CSV reader object
+    typedef io::trim_chars<' ', '\t'> TrimPolicy;
+    typedef io::double_quote_escape<',', '\"'> QuotePolicy;
+    const int column_count = 14; // Adjust the column count based on your CSV structure
+    io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(file_name);
+
+    // 4. Read the contents of the CSV file and store each row in a particle object. Store all particle objects in a vector.
+    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14;
+    int step_id = 0;
+    shared_ptr<Particles> particles = make_shared<Particles>();
+
+    // Discard the header row. This list is a guide to the columns in the CSV file.
+    in.read_header(io::ignore_extra_column, "step_id", "particle_id", "r", "g", "b", "x", "y", "z", "vx", "vy", "vz", "m", "rad", "rest");
+
+
+    while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14)) {
+        // Check if the step_id has changed
+        if (stoi(col1) != step_id) {
+            // Store the current snapshot
+            particle_states->snaps.push_back(particles);
+            // Create a new snapshot
+            particles = make_shared<Particles>();
+            step_id = stoi(col1);
+        }
+
+        // Create a new particle
+        shared_ptr<Particle> particle = make_shared<Particle>();
+        particle->particle_id = stoi(col2);
+        particle->r = stod(col3);
+        particle->g = stod(col4);
+        particle->b = stod(col5);
+        particle->x = stod(col6);
+        particle->y = stod(col7);
+        particle->z = stod(col8);
+        particle->vx = stod(col9);
+        particle->vy = stod(col10);
+        particle->vz = stod(col11);
+        particle->m = stod(col12);
+        particle->rad = stod(col13);
+        particle->rest = stod(col14);
+
+        // Add the particle to the snapshot
+        particles->particle_list.push_back(particle);
+
+    }
+
+    // Store the last snapshot
+    particle_states->snaps.push_back(particles);
+
+    cout << "Snapshots successfully loaded from cache: " << file_name << std::endl;
+
+    return particle_states;
+}

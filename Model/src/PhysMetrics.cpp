@@ -19,14 +19,15 @@ Metrics::~Metrics() {
 //define the compute_metrics function
 
 shared_ptr<test_metrics> Metrics::compute_metrics(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states) {
-    cout << "Computing metrics..." << endl;
-
+    
     //initialize the metrics object
     shared_ptr<test_metrics> metrics = make_shared<test_metrics>();
 
+    cout << "Computing metrics for " << particle_states->snaps.size() << " snapshots." << endl;
+
     //loop through the snapshots and compute the metrics
     for (int i = 0; i < particle_states->snaps.size(); i++) {
-        cout << "Computing metrics for snapshot " << i << "..." << endl;
+        
 
         //initialize the metrics object
         unique_ptr<test_metrics_t> metric = make_unique<test_metrics_t>();
@@ -42,7 +43,7 @@ shared_ptr<test_metrics> Metrics::compute_metrics(shared_ptr<scenario> scenario,
         metrics->metrics.push_back(move(metric));
     }
 
-    cout << "Metrics computed." << endl;
+    cout << "Metrics computed." << endl << endl;
 
     return metrics;
 }

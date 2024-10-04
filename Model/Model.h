@@ -8,7 +8,6 @@
 #include "include/PhysMetrics.h"
 #include "include/ParticlePlotter.h"
 #include "include/ObjHandler.h"
-#include "include/ParticleDumper.h"
 
 // Use the standard namespace
 using namespace std;
@@ -28,7 +27,7 @@ public:
     unique_ptr<Metrics> metrics;
     unique_ptr<Plotter> plotter;
     unique_ptr<ObjHandler> obj_handler;
-    unique_ptr<ParticleDumper> dumper;
+    
 
 
 };

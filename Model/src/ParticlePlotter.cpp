@@ -41,17 +41,21 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     init_GNU(scenario);
 
     //3. Populate the plot with the first snapshot
-
+    plot_GNU(particle_states->snaps[0], metrics->metrics[0]);
+    fprintf(gnuplotPipe, "set label 1 'Step: 0' at screen 0.01,0.01\n");
+    fflush(gnuplotPipe);
 
     //4. Confirm that the user is ready to start the simulation
-    cout << "ready to plot scenario:" << scenario->name << endl;
-    cout << "Press enter to continue." << endl;
+    cout << "............................................" << endl;
+    cout << "Ready to plot scenario:" << scenario->name << endl;
+    cout << "............................................" << endl;
+    cout << "Press enter to start." << endl;
     cin.ignore();
     cin.get();
 
 
     //5. Loop through the snapshots and plot each one on the plot
-    for (int i = 0; i < particle_states->snaps.size(); i++) {
+    for (int i = 1; i < particle_states->snaps.size(); i++) {
         cout << "plotting snapshot " << i << endl;
 
         plot_GNU(particle_states->snaps[i], metrics->metrics[i]); 
@@ -73,7 +77,7 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 //this function will initialize the plot using GNUplot. It is static as it only will be used by functions in this file
 void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     //initialize the plot using GNUplot (open a pipe)
-    cout << "Initializing GNU";
+    cout << "Initializing GNU" << endl;
 
     gnuplotPipe = popen("gnuplot -persistent", "w");
 
@@ -92,8 +96,6 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     //ensure objects are filled
     fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
 
-
-    
 
     fflush(gnuplotPipe);
 
