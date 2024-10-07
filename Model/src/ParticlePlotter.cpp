@@ -28,7 +28,7 @@ Plotter::~Plotter() {
 }
 
 // Define the plot_run method
-void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states, shared_ptr<test_metrics> metrics) { 
+void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states) { 
     
     //1. convert r,g,b to hex
     for (int i = 0; i < particle_states->snaps.size(); i++) {
@@ -41,7 +41,7 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     init_GNU(scenario);
 
     //3. Populate the plot with the first snapshot
-    plot_GNU(particle_states->snaps[0], metrics->metrics[0]);
+    plot_GNU(particle_states->snaps[0], particle_states->metrics[0]);
     fprintf(gnuplotPipe, "set label 1 'Step: 0' at screen 0.01,0.01\n");
     fflush(gnuplotPipe);
 
@@ -56,9 +56,13 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
     //5. Loop through the snapshots and plot each one on the plot
     for (int i = 1; i < particle_states->snaps.size(); i++) {
-        cout << "plotting snapshot " << i << endl;
+        //cout << "plotting snapshot " << i << endl;
 
-        plot_GNU(particle_states->snaps[i], metrics->metrics[i]); 
+        if (i % (particle_states->snaps.size() / 10) == 0) {
+            cout << "Simulation " << (i / (particle_states->snaps.size() / 100)) << "% complete." << endl;
+        }
+
+        plot_GNU(particle_states->snaps[i], particle_states->metrics[i]); 
 
         fprintf(gnuplotPipe, "set label 1 'Step: %d' at screen 0.01,0.01\n", i);
         fflush(gnuplotPipe);
@@ -113,7 +117,8 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     //2. plot the particles
 
-    fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable\n");
+    //fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable\n");
+    fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable fs empty\n");//for debugging you can use hollow circles
     for (int i = 0; i < particles->particle_list.size(); i++) {
 
         //set radius of the point using the rad field
@@ -128,9 +133,9 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
     //tell gnuplot that the data input for this snapshot has ended
     fprintf(gnuplotPipe, "e\n");
 
-    //3. update the metrics on the plot 
-    //fprintf(gnuplotPipe, "set label 'Time: %d' at 0,0,0\n", metrics_t->time); //does not show up correctly, but placeholder for metrics to be implemented
-    //fprintf(gnuplotPipe, "set label 'Memory: %d' at 0,0,0\n", metrics_t->memory);
+    //3. update the metrics on the plot , currently only fps is being displayed
+    fprintf(gnuplotPipe, "set label 2 'FPS: %f' at screen 0.01,0.95\n", metrics_t->fps);
+    
 
     //4. refresh the plot
     

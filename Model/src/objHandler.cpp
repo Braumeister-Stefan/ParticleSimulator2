@@ -1,3 +1,8 @@
+//disable warnings
+#define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING
+#define BOOST_MP_NOT_THREAD_SAFE
+
+
 #include "../include/ObjHandler.h"
 #include "../include/InitStructs.h"
 #include "../include/MathUtils.h"
@@ -9,6 +14,7 @@
 #include <fstream>
 #include <memory>
 #include <cmath>
+#include <boost/multiprecision/cpp_dec_float.hpp>
 
 //to use pi
 #ifndef M_PI
@@ -304,9 +310,10 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
         particle->r = complex_object->r;
         particle->g = complex_object->g;
         particle->b = complex_object->b;
-        particle->x = sample_point.x;
-        particle->y = sample_point.y;
-        //particle->z = complex_object->z;
+        particle->x = sample_point.x.convert_to<double>();
+        particle->y = sample_point.y.convert_to<double>();
+
+
         particle->vx = complex_object->vx;
         particle->vy = complex_object->vy;
         particle->vz = complex_object->vz;

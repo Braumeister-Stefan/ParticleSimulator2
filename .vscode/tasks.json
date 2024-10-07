@@ -6,6 +6,7 @@
 			"label": "C/C++: g++.exe build active file",
 			"command": "C:\\MinGW\\bin\\g++.exe",
 			"args": [
+				"-IC:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/boost_1_76_0", 
 				"-fdiagnostics-color=always",
 				"-g",
 				"-std=c++14",

@@ -7,11 +7,16 @@
 
 #include <memory>
 
+#include <iostream>
+
 
 
 using namespace std;
 
 int main() {
+
+    //version 
+    cout << "cpp version: " << __cplusplus << endl;
 
     //1. initialize the model
     ParticleModel model;
@@ -41,10 +46,10 @@ int main() {
 
     //4. validate the simulation and generate metrics
 
-    shared_ptr<test_metrics> metrics = model.metrics->compute_metrics(selected_scenario, particle_states);
+    particle_states = model.metrics->compute_metrics(selected_scenario, particle_states);
 
     //5. visualize the model results using the snapshots
-    model.plotter->plot_run(selected_scenario, particle_states, metrics);
+    model.plotter->plot_run(selected_scenario, particle_states);
 
     return 0;
     

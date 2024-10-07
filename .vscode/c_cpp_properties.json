@@ -3,7 +3,9 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "C:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/boost_1_76_0"
+               
             ],
             "defines": [
                 "_DEBUG",

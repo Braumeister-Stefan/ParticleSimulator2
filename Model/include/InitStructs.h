@@ -56,24 +56,22 @@ struct objects {
 
 
 
-struct snapshots {
-    //this struct will contain all the snapshots of the particles at different times
-    vector<shared_ptr<Particles>> snaps;
-};
-
-
 struct test_metrics_t {
     //this struct will contain the metrics of the test
-    double time;
+    double fps;
     double memory;
     double cpu;
     double gpu;
 };
 
-struct test_metrics {
-    vector<shared_ptr<test_metrics_t>> metrics;
-};
 
+struct snapshots {
+    //this struct will contain all the snapshots of the particles at different times
+    vector<shared_ptr<Particles>> snaps;
+    vector<shared_ptr<test_metrics_t>> metrics;
+
+    
+};
 
 #endif // INIT_STRUCTS_H
 
