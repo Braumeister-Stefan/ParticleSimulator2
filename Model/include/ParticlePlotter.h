@@ -1,8 +1,11 @@
 #ifndef PARTICLE_PLOTTER_H
 #define PARTICLE_PLOTTER_H
 
+//Standard libraries
 #include <iostream>
 #include <memory>
+
+//Internal libraries
 #include "InitStructs.h"
 
 //namespaces

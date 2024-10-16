@@ -1,20 +1,24 @@
-//disable warnings
-#define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING
-#define BOOST_MP_NOT_THREAD_SAFE
 
 
-#include "../include/ObjHandler.h"
-#include "../include/InitStructs.h"
-#include "../include/MathUtils.h"
-#define CSV_IO_NO_THREAD
-#include "../include/3party/csv.h"
-#include "../include/Particles.h"
-
+//Standard libraries
 #include <iostream>
 #include <fstream>
 #include <memory>
 #include <cmath>
+
+
+//External libraries
 #include <boost/multiprecision/cpp_dec_float.hpp>
+#define CSV_IO_NO_THREAD
+#include "../include/3party/csv.h"
+
+
+//Internal libraries
+#include "../include/ObjHandler.h"
+#include "../include/InitStructs.h"
+#include "../include/MathUtils.h"
+#include "../include/Particles.h"
+
 
 //to use pi
 #ifndef M_PI
@@ -322,11 +326,19 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
 
         particles->particle_list.push_back(move(particle));
+
+        //remove overlapping particles
+        remove_overlaps(particles);
+
+        //if the number of particles is equal to the complexity_n, break the loop
+        if (particles->particle_list.size() == complexity_n) {
+            break;
+        }
     }
 
-    //remove overlapping particles
     
-    remove_overlaps(particles);
+
+    
 
     //set mass equal to complex_object mass divided by size of particles
     double m_i = complex_object->m / particles->particle_list.size();

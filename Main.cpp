@@ -1,22 +1,24 @@
+//Author: Stephane Mertens de Wilmars
+
 // This project allows the user to simulate collissions and gravitational forces between spheres in 2D space
+//Project to be built from the Main.cpp file. For more information, please refer to the README.md file.
 
 
+//Standard libraries
+#include <memory>
+#include <iostream>
+
+//Internal libraries
 #include "Model/Model.h"
 #include "Model/include/InitStructs.h"
 
-
-#include <memory>
-
-#include <iostream>
-
-
-
+//namespaces
 using namespace std;
+
 
 int main() {
 
-    //version 
-    cout << "cpp version: " << __cplusplus << endl;
+    
 
     //1. initialize the model
     ParticleModel model;

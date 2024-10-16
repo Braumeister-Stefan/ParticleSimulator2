@@ -1,21 +1,22 @@
-#include "../include/ParticlePlotter.h"
-#include "../include/InitStructs.h"
+//Standard libraries
 #include <memory> // Add this line to include the necessary header for shared_ptr
 #include <iostream>
-#include <windows.h>
 #include <fstream>
 #include <sstream>
 #include <stdio.h>
+#include <windows.h>  
 
-extern "C" FILE *popen(const char *command, const char *mode); //these 2 lines are added as popen and pclose were not recognized. Note that these are C functions, but worked without issue on ParticleSimulator1...likely need to change something about the compiler settings
-extern "C" void pclose(FILE *pipe);
-
+//Internal libraries
+#include "../include/ParticlePlotter.h"
+#include "../include/InitStructs.h"
 
 //namespaces
 using namespace std;
 
-//global variables
+//defining the gnuplot pipe
 FILE *gnuplotPipe = nullptr;
+
+
 
 // Constructor
 Plotter::Plotter() {
@@ -135,6 +136,20 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     //3. update the metrics on the plot , currently only fps is being displayed
     fprintf(gnuplotPipe, "set label 2 'FPS: %f' at screen 0.01,0.95\n", metrics_t->fps);
+    //print the KE and PE and TE
+    fprintf(gnuplotPipe, "set label 3 'KE: %f' at screen 0.01,0.90\n", metrics_t->KE);
+    fprintf(gnuplotPipe, "set label 4 'PE: %f' at screen 0.01,0.85\n", metrics_t->PE);
+    fprintf(gnuplotPipe, "set label 5 'TE: %f' at screen 0.01,0.80\n", metrics_t->TE);
+    //fprintf(gnuplotPipe, "set label 6 'TE Change: %f' at screen 0.01,0.75\n", metrics_t->TE_change);
+
+    //format by dividing by /1000 and calling it K
+    fprintf(gnuplotPipe, "set label 6 'Aggregate TE Error: %f K' at screen 0.01,0.75\n", metrics_t->TE_error / 1000);
+
+
+
+
+    
+
     
 
     //4. refresh the plot

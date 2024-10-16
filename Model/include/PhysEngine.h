@@ -1,15 +1,23 @@
 #ifndef PHYS_ENGINE_H
 #define PHYS_ENGINE_H
 
-#include "InitStructs.h"
-
+//Standard libraries
 #include <iostream>
 #include <memory>
+
+//Internal libraries
+#include "InitStructs.h"
+
 
 using namespace std;
 
 class Engine {
 public:
+
+    //declare static member variables
+    static double dt;
+
+
     // Constructor
     Engine();
 

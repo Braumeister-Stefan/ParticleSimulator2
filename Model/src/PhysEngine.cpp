@@ -1,16 +1,4 @@
-//disable warnings
-///#define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING
-//#define BOOST_MP_NOT_THREAD_SAFE
-
-#include <boost/multiprecision/cpp_dec_float.hpp>
-
-
-#include "../include/PhysEngine.h"
-#include "../include/InitStructs.h"
-#include "../include/MathUtils.h"
-#define CSV_IO_NO_THREAD
-#include "../include/3party/csv.h"
-
+//Standard libraries
 #include <memory>
 #include <iostream>
 #include <fstream>
@@ -20,10 +8,17 @@
 #include <string>
 #include <iostream>
 #include <chrono>
+#include <iomanip>
 
+//External libraries
+#define CSV_IO_NO_THREAD
+#include "../include/3party/csv.h"
+#include <boost/multiprecision/cpp_dec_float.hpp>
 
-
-
+//Internal libraries
+#include "../include/PhysEngine.h"
+#include "../include/InitStructs.h"
+#include "../include/MathUtils.h"
 
 
 //namespaces
@@ -31,8 +26,12 @@ using namespace std;
 using namespace std::chrono;
 using namespace boost::multiprecision;
 
+//constants
+//Gravitational constant
+const double G = 6.674 * pow(10, -11); //m^3 kg^-1 s^-2
 
-
+//define static member variables
+double Engine::dt = 1; //time step
 
 // Constructor
 Engine::Engine() {
@@ -47,6 +46,9 @@ Engine::~Engine() {
 // Run the simulation and return snapshots of each time step
 shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles) {
     cout << "Engine is initialized." << endl;
+
+    
+    
 
     //1. initialize the snapshots object
     shared_ptr<snapshots> particle_states = make_shared<snapshots>();
@@ -63,9 +65,26 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
 
 
-    //3.loop through the steps as defined in the scenario
+    //3. Initialize the time step globally and calculate the number of steps
 
-    for (int i = 0; i < scenario->steps; i++) {
+    Engine::dt = scenario->dt;
+    //cout << "Total time of the simulation: " << scenario->time << " s" << endl;
+    //cout << "Time step length: " << scenario->dt << " s" << endl;
+
+    double steps_db = scenario->time / scenario->dt;
+    int steps = static_cast<int>(steps_db);
+
+    cout << "Number of steps to be simulated: " << steps << endl << endl;
+
+    //4. loop through the steps as defined in the scenario
+
+    for (int i = 0; i < steps; i++) {
+
+        //if i=714, print a message to the console
+        //if (i == 714) {
+
+        //    cout << "Step 714 reached." << endl;
+        //}
 
         //save start time
         auto start_time = high_resolution_clock::now();
@@ -83,8 +102,8 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         update_particles(particles);
 
         //print every 5% of the simulation
-        if (i % (scenario->steps / 20) == 0) {
-            cout << i / (scenario->steps / 100) << "% of the simulation complete." << endl;
+        if (i % (steps / 20) == 0) {
+            cout << i / (steps / 100) << "% of the simulation complete." << endl;
         }
 
         //save end time
@@ -100,11 +119,11 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     }
 
-    //confirm that the run has ended
+    //5.confirm that the run has ended
 
     cout << scenario->name << " simulation completed." << endl << endl;
 
-    //4. save down snapshots to the csv 
+    //6. save down snapshots to the csv 
 
     run_to_cache(scenario, particle_states);
 
@@ -132,6 +151,13 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
 
     //cout << "Resolving gravity..." << endl;
     resolve_gravity(particles);
+
+    //make scaler with all scalers set to 1
+    //  shared_ptr<backed_scaler> scaler = make_shared<backed_scaler>();
+    //  scaler->scaler.reserve(particles->particle_list.size());
+    //  for (int i = 0; i < particles->particle_list.size(); i++) {
+    //      scaler->scaler.push_back(1);
+    //  }
     
 
     //3. update locations with velocities
@@ -144,6 +170,13 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
 
 shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> particles) {
     //this function will resolve collissions between particles
+
+    //print all particles (1 line per particle) before the collission resolution
+    //cout << "Particles before collission resolution:" << endl;
+    //for (int i = 0; i < particles->particle_list.size(); i++) {
+    //    cout << "Particle " << i << ": x=" << particles->particle_list[i]->x << ", y=" << particles->particle_list[i]->y << ", z=" << particles->particle_list[i]->z << endl;
+
+    //}
 
     //1.initialize the scaler object
     shared_ptr<backed_scaler> scaler = make_shared<backed_scaler>(); 
@@ -168,7 +201,19 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
 
             if (collission) {
                 //2b. backtrack the particles
+
+                //cout << "Collission detected between particles " << i << " and " << j << endl;
+                
+                //cout << "pre-backtrack positions: " << endl;
+                //cout << "Particle " << i << ": x=" << particles->particle_list[i]->x << ", y=" << particles->particle_list[i]->y << ", z=" << particles->particle_list[i]->z << endl;
+                //cout << "Particle " << j << ": x=" << particles->particle_list[j]->x << ", y=" << particles->particle_list[j]->y << ", z=" << particles->particle_list[j]->z << endl;
+
+
                  double scaler_i = backtrack_pair(particles->particle_list[i], particles->particle_list[j]);
+
+                //cout << "post-backtrack positions: " << endl;
+                //cout << "Particle " << i << ": x=" << particles->particle_list[i]->x << ", y=" << particles->particle_list[i]->y << ", z=" << particles->particle_list[i]->z << endl;
+                //cout << "Particle " << j << ": x=" << particles->particle_list[j]->x << ", y=" << particles->particle_list[j]->y << ", z=" << particles->particle_list[j]->z << endl;
 
                 //2c. store the scaler for the particle
 
@@ -184,6 +229,12 @@ shared_ptr<backed_scaler> Engine::resolve_collisions(shared_ptr<Particles> parti
 
         }
     }
+
+    //cout << "Particles after collission resolution:" << endl;
+    //for (int i = 0; i < particles->particle_list.size(); i++) {
+    //    cout << "Particle " << i << ": x=" << particles->particle_list[i]->x << ", y=" << particles->particle_list[i]->y << ", z=" << particles->particle_list[i]->z << endl;
+
+    //}
 
     
     return scaler;
@@ -226,24 +277,57 @@ double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particl
     Vector2D vel1 = { high_prec(particle1->vx), high_prec(particle1->vy) };
     Vector2D vel2 = { high_prec(particle2->vx), high_prec(particle2->vy) };
 
+    //cout << "vel1: " << vel1.x << ", " << vel1.y << endl;
+    //cout << "vel2: " << vel2.x << ", " << vel2.y << endl;
+
+
 
 
     //double distance_pre = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
     high_prec distance_pre = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
+    //cout << "Distance before collission: " << distance_pre << endl;
+
 
    
 
     // 2. Calculate relative velocity and position difference
     Vector2D rel_pos = pos2 - pos1;
+
+    //check if rel_pos is zero
+    //if (rel_pos.x == 0 && rel_pos.y == 0) {
+    //    cout << "rel_pos is zero" << endl;
+        
+    //}
+
+    //cout << "rel_pos: " << rel_pos.x << ", " << rel_pos.y << endl;
     Vector2D rel_vel = vel2 - vel1;
+    //cout << "rel_vel: " << rel_vel.x << ", " << rel_vel.y << endl;
+
+    //check if rel_vel is zero
+    if (rel_vel.x == 0 && rel_vel.y == 0) {
+        cout << "rel_vel is zero" << endl;
+        //add a very small positive value to the first particle's x velocity
+        particle1->vx += 0.0000000001;
+        
+    }
 
     // 3. Calculate quadratic terms for collision detection with high precision
     high_prec a = dot(rel_vel, rel_vel);  // Coefficient of t^2
+
+    //cout << "a: " << a << endl;
+
     high_prec b = 2 * dot(rel_pos, rel_vel);  // Coefficient of t
+
+    //cout << "b: " << b << endl;
+
     high_prec c = dot(rel_pos, rel_pos) - pow(particle1->rad + particle2->rad, 2);  // Constant term
+
+    //cout << "c: " << c << endl;
 
     // 4. Solve quadratic equation for time of collision
     high_prec discriminant = b * b - 4 * a * c;
+
+    //cout << "Discriminant: " << discriminant << endl;
 
     if (discriminant < 0) {
         // No collision occurs
@@ -254,21 +338,30 @@ double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particl
     high_prec t_collision1 = (-b - sqrt_discriminant) / (2 * a);
     high_prec t_collision2 = (-b + sqrt_discriminant) / (2 * a);
 
-    // Use the root that falls within the current timestep 
-    
+    //cout << "t_collision1: " << t_collision1 << endl;
+    //cout << "t_collision2: " << t_collision2 << endl;
 
-    //double t_collision = 0;
-    //if (t_collision1 >= -1&& t_collision1 <= 0) {
-        //if smaller than -1, set to -1
-        //if (t_collision1 < -1) {
-        //    t_collision1 = -1;
-        //} else {
-    high_prec t_collision = t_collision1;
-        //}
+    // Use the value for t_collission closest to 0
+
+    high_prec t_collission1_distfrom0 = abs(t_collision1);
+    high_prec t_collission2_distfrom0 = abs(t_collision2);
+
+
+    high_prec t_collision;
+    if (t_collission1_distfrom0 < t_collission2_distfrom0) {
+        // Use t_collision1
+
+        t_collision = t_collision1;
         
-    //} else if (t_collision2 >= -1 && t_collision2 <= 0) {
-    //    t_collision = t_collision2;
-    //}
+    }
+    else {
+
+        t_collision = t_collision2;
+  
+    }
+
+    
+      
 
 
 
@@ -295,8 +388,12 @@ double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particl
         
     }
 
+    //cout << "Distance after collission: " << distance << endl;
+
     // 6. Calculate the time scaler
     double time_scaler = 1.0 - t_collision.convert_to<double>();  // Remaining time in the timestep
+
+    //cout << "Time scaler: " << time_scaler << endl;
 
     return time_scaler;
 }
@@ -344,31 +441,81 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
 
 
 void Engine::resolve_gravity(shared_ptr<Particles> particles) {
-    //this function will resolve the gravitational attraction between particles
+    // This function resolves the gravitational attraction between particles
 
-    //1. loop through the particles
+    // Define a small value to avoid division by zero
+
+    high_prec epsilon = 0.0000000001;
+
+    // Loop through the particles
     for (int i = 0; i < particles->particle_list.size(); i++) {
-        for (int j = 0; j < particles->particle_list.size(); j++) {
-            if (i != j) {
-                //1a. calculate the distance between the particles
-                double distance = hypot(particles->particle_list[j]->x - particles->particle_list[i]->x, particles->particle_list[j]->y - particles->particle_list[i]->y);
+        for (int j = i + 1; j < particles->particle_list.size(); j++) {
+            // Skip self-interaction
+            if (i == j) continue;
 
-                //1b. calculate the force of gravity
-                double force = 6.674 * pow(10, -11) * particles->particle_list[i]->m * particles->particle_list[j]->m / pow(distance, 2);
+            // Calculate the distance between particles i and j
+            high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+            high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
+            high_prec distance = hypot(dx, dy);
 
-                //1c. calculate the direction of the force
-                double fx = force * (particles->particle_list[j]->x - particles->particle_list[i]->x) / distance;
-                double fy = force * (particles->particle_list[j]->y - particles->particle_list[i]->y) / distance;
-                //double fz = force * (particles->particle_list[j]->z - particles->particle_list[i]->z) / distance;
+            if (distance < epsilon) {
+                
+                distance = epsilon;
+            }
 
-                //1d. update the velocity of the particle
-                particles->particle_list[i]->vx += fx / particles->particle_list[i]->m;
-                particles->particle_list[i]->vy += fy / particles->particle_list[i]->m;
-                //particles->particle_list[i]->vz += fz / particles->particle_list[i]->m;
+            // Calculate the gravitational force magnitude
+            high_prec force = G * particles->particle_list[i]->m * particles->particle_list[j]->m / (distance * distance);
+
+            // Calculate the components of the force
+            high_prec fx = force * (dx / distance);
+            high_prec fy = force * (dy / distance);
+
+            // Calculate KE, PE, and TE for the system of i and j before the force update, all are magnitudes
+            high_prec KE_pre = 0.5 * particles->particle_list[i]->m * (pow(particles->particle_list[i]->vx, 2) + pow(particles->particle_list[i]->vy, 2)) +
+                               0.5 * particles->particle_list[j]->m * (pow(particles->particle_list[j]->vx, 2) + pow(particles->particle_list[j]->vy, 2));
+            high_prec PE_pre = -G * particles->particle_list[i]->m * particles->particle_list[j]->m / distance;
+            high_prec TE_pre = KE_pre + PE_pre;
+
+
+
+            // Update the velocities of both particles to conserve momentum
+            particles->particle_list[i]->vx += (fx / particles->particle_list[i]->m).convert_to<double>() * dt;
+            particles->particle_list[i]->vy += (fy / particles->particle_list[i]->m).convert_to<double>() * dt;
+
+            particles->particle_list[j]->vx -= (fx / particles->particle_list[j]->m).convert_to<double>() * dt;
+            particles->particle_list[j]->vy -= (fy / particles->particle_list[j]->m).convert_to<double>() * dt;
+
+            // Recalculate distance based on new positions
+            high_prec new_dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+            high_prec new_dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
+            high_prec new_distance = hypot(new_dx, new_dy);
+
+            
+            // Calculate KE, PE, and TE for the system of i and j after the force update using new distance
+            high_prec KE_post = 0.5 * particles->particle_list[i]->m * (pow(particles->particle_list[i]->vx, 2) + pow(particles->particle_list[i]->vy, 2)) +
+                                0.5 * particles->particle_list[j]->m * (pow(particles->particle_list[j]->vx, 2) + pow(particles->particle_list[j]->vy, 2));
+
+            high_prec PE_post = -G * particles->particle_list[i]->m * particles->particle_list[j]->m / new_distance;
+
+            high_prec TE_post = KE_post + PE_post;
+
+            
+            // Calculate the difference in total energy before and after the force update
+            high_prec TE_diff = TE_post - TE_pre;
+            high_prec TE_error = TE_diff / TE_pre;
+
+            // Threshold for the error
+            high_prec TE_error_threshold = 0.1; // Lower threshold for higher precision
+
+            // If the error is greater than the threshold, print the error and distance
+            if (abs(TE_error) > TE_error_threshold) {
+                cout << "Distance: " << distance << endl;
+                cout << "TE error %: " << TE_error * 100 << "%" << endl;
             }
         }
     }
 }
+
 
 void Engine::update_locations(shared_ptr<Particles> particles, shared_ptr<backed_scaler> scaler) {
     //this function will update the locations of the particles
@@ -376,9 +523,9 @@ void Engine::update_locations(shared_ptr<Particles> particles, shared_ptr<backed
     //1. loop through the particles
     for (int i = 0; i < particles->particle_list.size(); i++) {
         
-        particles->particle_list[i]->x += particles->particle_list[i]->vx * scaler->scaler[i];
-        particles->particle_list[i]->y += particles->particle_list[i]->vy * scaler->scaler[i];
-        //particles->particle_list[i]->z += particles->particle_list[i]->vz * scaler->scaler[i];
+        particles->particle_list[i]->x += particles->particle_list[i]->vx * scaler->scaler[i] * dt;
+        particles->particle_list[i]->y += particles->particle_list[i]->vy * scaler->scaler[i] * dt;
+        //particles->particle_list[i]->z += particles->particle_list[i]->vz * scaler->scaler[i] * dt;
     }
 }
 
@@ -407,10 +554,24 @@ void Engine::run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> p
     //4. loop through the snapshots and write the data to the file, adding the step_id
 
     for (int i = 0; i < particle_states->snaps.size(); i++) {
-        for (int j = 0; j < particle_states->snaps[i]->particle_list.size(); j++) {
-            file << i << "," << particle_states->snaps[i]->particle_list[j]->particle_id << "," << particle_states->snaps[i]->particle_list[j]->r << "," << particle_states->snaps[i]->particle_list[j]->g << "," << particle_states->snaps[i]->particle_list[j]->b << "," << particle_states->snaps[i]->particle_list[j]->x << "," << particle_states->snaps[i]->particle_list[j]->y << "," << particle_states->snaps[i]->particle_list[j]->z << "," << particle_states->snaps[i]->particle_list[j]->vx << "," << particle_states->snaps[i]->particle_list[j]->vy << "," << particle_states->snaps[i]->particle_list[j]->vz << "," << particle_states->snaps[i]->particle_list[j]->m << "," << particle_states->snaps[i]->particle_list[j]->rad << "," << particle_states->snaps[i]->particle_list[j]->rest << endl;
-        }
+    for (int j = 0; j < particle_states->snaps[i]->particle_list.size(); j++) {
+        file << std::fixed << std::setprecision(15) // Set precision to 15 decimal places
+             << i << ","
+             << particle_states->snaps[i]->particle_list[j]->particle_id << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->r) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->g) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->b) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->x) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->y) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->z) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->vx) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->vy) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->vz) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->m) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->rad) << ","
+             << static_cast<double>(particle_states->snaps[i]->particle_list[j]->rest) << std::endl;
     }
+}
 
     //5. save and close the file
 

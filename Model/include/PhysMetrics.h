@@ -1,11 +1,14 @@
 #ifndef PHYS_METRICS_H
 #define PHYS_METRICS_H
 
-#include "InitStructs.h"
-
+//Standard libraries
 #include <iostream>
 #include <memory>
 
+//Internal libraries
+#include "InitStructs.h"
+
+//namespaces
 using namespace std;
 
 class Metrics {
