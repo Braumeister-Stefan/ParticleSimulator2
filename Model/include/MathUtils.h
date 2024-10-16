@@ -1,23 +1,14 @@
 //This file contains geometric and other mathematical structures
 
-//disable warnings
-#define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING
-#define BOOST_MP_NOT_THREAD_SAFE
-
+//Internal libraries
 #include "Particles.h"
 
 #include <boost/multiprecision/cpp_dec_float.hpp>
 
 
-#ifndef MATH_UTILS_H
-#define MATH_UTILS_H
-
+//namespaces
 using namespace boost::multiprecision;
-
 using high_prec = boost::multiprecision::cpp_dec_float_50;
-
-
-
 
 
 //Boosterized structures
@@ -25,6 +16,12 @@ using high_prec = boost::multiprecision::cpp_dec_float_50;
 struct Vector2D {
     high_prec x;
     high_prec y;
+
+};
+
+struct Vector2D_double {
+    double x;
+    double y;
 
 };
 
@@ -64,8 +61,6 @@ inline high_prec dot(const Vector2D& v1, const Vector2D& v2) {
 
 
 
-
-
 struct Circle {
     Vector2D center;
     double radius;
@@ -83,20 +78,3 @@ Vector2D find_intersection(Line line1, Circle circle, Vector2D pos);
 Vector2D sample_in_circle(Vector2D center, double radius);
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#endif // MATH_UTILS_H

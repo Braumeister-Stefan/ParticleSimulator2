@@ -1,8 +1,11 @@
 #ifndef PARTICLEMODEL_H
 #define PARTICLEMODEL_H
 
+// Standard libraries
 #include <iostream>
 #include <memory>
+
+// Internal libraries
 #include "include/Interfacer.h"
 #include "include/PhysEngine.h"
 #include "include/PhysMetrics.h"

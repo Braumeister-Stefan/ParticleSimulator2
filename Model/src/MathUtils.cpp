@@ -1,17 +1,15 @@
-//disable warnings
-#define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING
-#define BOOST_MP_NOT_THREAD_SAFE
-
 //implements the functions declared in MathUtils.h
 
-#include "../include/MathUtils.h"
-
+//Standard libraries
 #include <iostream>
 #include <cmath>
 #include <vector>
+
+//Internal libraries
+#include "../include/MathUtils.h"
 #include "../include/Particles.h"
 
-//to use pi
+//defining global constants
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif

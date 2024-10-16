@@ -1,37 +1,37 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "cppbuild",
-			"label": "C/C++: g++.exe build active file",
-			"command": "C:\\MinGW\\bin\\g++.exe",
-			"args": [
-				"-IC:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/boost_1_76_0", 
-				"-fdiagnostics-color=always",
-				"-g",
-				"-std=c++14",
-				"Main.cpp",
-				"Model/Model.cpp",
-				"Model/src/Interfacer.cpp",
-				"Model/src/PhysEngine.cpp",
-				"Model/src/PhysMetrics.cpp",
-				"Model/src/ParticlePlotter.cpp",
-				"Model/src/ObjHandler.cpp",
-				"Model/src/MathUtils.cpp",
-				"-o",
-				"${workspaceFolder}/ParticleSimulator2.exe"
-			],
-			"options": {
-				"cwd": "${fileDirname}"
-			},
-			"problemMatcher": [
-				"$gcc"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"detail": "compiler: C:\\MinGW\\bin\\g++.exe"
-		}
-	]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "C/C++: g++.exe build active file",
+            "type": "cppbuild",
+            "command": "C:/Users/smdw1/scoop/apps/gcc/13.2.0/bin/g++.exe",
+            "args": [
+                "-IC:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/boost_1_86_0",
+                "-fdiagnostics-color=always",
+                "-g",
+                "-std=c++20",
+                "${workspaceFolder}/Main.cpp",
+                "${workspaceFolder}/Model/Model.cpp",
+                "${workspaceFolder}/Model/src/Interfacer.cpp",
+                "${workspaceFolder}/Model/src/PhysEngine.cpp",
+                "${workspaceFolder}/Model/src/PhysMetrics.cpp",
+                "${workspaceFolder}/Model/src/ParticlePlotter.cpp",
+                "${workspaceFolder}/Model/src/ObjHandler.cpp",
+                "${workspaceFolder}/Model/src/MathUtils.cpp",
+                "-o",
+                "${workspaceFolder}/ParticleSimulator2.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "compiler: C:/Users/smdw1/scoop/apps/gcc/13.2.0/bin/g++.exe"
+        }  
+    ]
 }

@@ -17,10 +17,11 @@ struct scenario {
     int scenario_id;
     string name;
     string obj_list;
-    int steps;
+    double time;
     string interaction_func;
     bool try_cache; //if true, check if the scenario has been run before and use the results 
     bool refresh_obj; //if true, rebuild the complex objects
+    double dt; //time step
     bool three_d; //if false, the simulation will be in 2D
 };
 
@@ -62,6 +63,12 @@ struct test_metrics_t {
     double memory;
     double cpu;
     double gpu;
+    double KE;
+    double PE;
+    double TE;
+    double TE_change;
+    double TE_error;
+    double relative_error;
 };
 
 
