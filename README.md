@@ -33,13 +33,13 @@ The elements below are to be recycled from ParticleSimulator1, in accordance wit
 *	Main.cpp file
 
 Header files:
-*	ObjHandler.h : this will contain all functionality in generating, saving and unpacking complex objects
-*	PhysEngine.h: this will initialize the simulation, run through the timesteps, update particle locations and save Particle information & meta information (fps etc) at the end of the simulation
-*	ParticlePlotter.h: this will set up the plotting engine and plot particles for every timestep
-*	Interfacer.h: this will read the input parameters, define scenarios and allow the user to choose which scenario to run.
-*       Particles.h: this will define the individual, grouped and time-variant grouped particles and meta information per timestep.
-*       PhysMetrics.h: this will define all functionality related to the validation (Both physics and efficiency related) metrics.
-*       Utils.h: this will contain all math heavy functions  called upon by PhysEngine 
+ObjHandler.h : this will contain all functionality in generating, saving and unpacking complex objects
+  PhysEngine.h: this will initialize the simulation, run through the timesteps, update particle locations and save Particle information & meta information (fps etc) at the end of the simulation
+  ParticlePlotter.h: this will set up the plotting engine and plot particles for every timestep
+  Interfacer.h: this will read the input parameters, define scenarios and allow the user to choose which scenario to run.
+* Particles.h: this will define the individual, grouped and time-variant grouped particles and meta information per timestep.
+* PhysMetrics.h: this will define all functionality related to the validation (Both physics and efficiency related) metrics.
+* Utils.h: this will contain all math heavy functions  called upon by PhysEngine 
 
 Source files:
 * ObjHandler.cpp
