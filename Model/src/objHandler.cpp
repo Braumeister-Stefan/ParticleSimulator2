@@ -291,6 +291,11 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
     //loop through n*3 times the complexity_n and sample random points within the circle radius (defined by complexity_size)
     for (int i = 0; i < 4*complexity_n; i++) {
+
+        //check if the number of particles loaded is equal to the complexity_n
+        if (particles->particle_list.size() == complexity_n) {
+            break;
+        }
         
         //store the sampled point in a particle struct and add it to the particles struct
         unique_ptr<Particle> particle(new Particle);
@@ -304,8 +309,8 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
         particle->r = complex_object->r;
         particle->g = complex_object->g;
         particle->b = complex_object->b;
-        particle->x = sample_point.x;
-        particle->y = sample_point.y;
+        particle->x = sample_point.x.convert_to<double>();
+        particle->y = sample_point.y.convert_to<double>();
         //particle->z = complex_object->z;
         particle->vx = complex_object->vx;
         particle->vy = complex_object->vy;

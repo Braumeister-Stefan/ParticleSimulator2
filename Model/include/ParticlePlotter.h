@@ -18,7 +18,7 @@ public:
     ~Plotter();
 
     // Define the plot_run method
-    void plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> snapshots, shared_ptr<test_metrics> metrics);
+    void plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> snapshots);
 
     //Define the GNUplot functions
     void init_GNU(shared_ptr<scenario> scenario);

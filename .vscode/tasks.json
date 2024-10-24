@@ -4,20 +4,21 @@
 		{
 			"type": "cppbuild",
 			"label": "C/C++: g++.exe build active file",
-			"command": "C:\\MinGW\\bin\\g++.exe",
+			"command": "C:\\Users\\smdw1\\scoop\\apps\\gcc\\13.2.0\\bin\\g++",
 			"args": [
 				"-fdiagnostics-color=always",
 				"-g",
 				"-std=c++14",
-				"Main.cpp",
-				"Model/Model.cpp",
-				"Model/src/Interfacer.cpp",
-				"Model/src/PhysEngine.cpp",
-				"Model/src/PhysMetrics.cpp",
-				"Model/src/ParticlePlotter.cpp",
-				"Model/src/ObjHandler.cpp",
-				"Model/src/MathUtils.cpp",
-				"-o",
+				"-I", "C:\\Users\\smdw1\\OneDrive\\Bureaublad\\Development\\Projects\\cpp\\boost_1_86_0",
+				"${workspaceFolder}/Main.cpp",
+				"${workspaceFolder}/Model/Model.cpp",
+				"${workspaceFolder}/Model/src/Interfacer.cpp",
+				"${workspaceFolder}/Model/src/PhysEngine.cpp",
+				"${workspaceFolder}/Model/src/PhysMetrics.cpp",
+				"${workspaceFolder}/Model/src/ParticlePlotter.cpp",
+				"${workspaceFolder}/Model/src/ObjHandler.cpp",
+				"${workspaceFolder}/Model/src/MathUtils.cpp",
+				"-o", 
 				"${workspaceFolder}/ParticleSimulator2.exe"
 			],
 			"options": {
@@ -30,7 +31,7 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"detail": "compiler: C:\\MinGW\\bin\\g++.exe"
+			"detail": "compiler: C:\\Users\\smdw1\\scoop\\apps\\gcc\\13.2.0\\bin\\g++"
 		}
 	]
 }

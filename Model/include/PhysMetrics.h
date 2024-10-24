@@ -17,7 +17,7 @@ public:
     ~Metrics();
 
     //Function to compute (validation) metrics of the simulation
-    shared_ptr<test_metrics> compute_metrics(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states);
+    shared_ptr<snapshots> compute_metrics(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states);
 
     
 

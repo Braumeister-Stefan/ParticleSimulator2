@@ -5,14 +5,14 @@
       "name": "g++.exe - Build and debug active file",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${fileDirname}\\ParticleSimulator2.exe",
+      "program": "${workspaceFolder}/ParticleSimulator2.exe",
       "args": [],
-      "stopAtEntry": false,
+      "stopAtEntry": true,
       "cwd": "${workspaceFolder}",
       "environment": [],
       "externalConsole": false,
       "MIMode": "gdb",
-      "miDebuggerPath": "C:\\mingw64\\bin\\gdb.exe",
+      "miDebuggerPath": "C:\\Users\\smdw1\\scoop\\apps\\gdb\\14.1\\bin\\gdb.exe", // Updated path
       "preLaunchTask": "C/C++: g++.exe build active file",
       "setupCommands": [
         {
@@ -32,7 +32,7 @@
       "cwd": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2",
       "program": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2/build/Debug/outDebug",
       "MIMode": "gdb",
-      "miDebuggerPath": "gdb",
+      "miDebuggerPath": "C:\\Users\\smdw1\\scoop\\apps\\gdb\\14.1\\bin\\gdb.exe", // Updated path
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",

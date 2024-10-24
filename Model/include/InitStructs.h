@@ -17,10 +17,11 @@ struct scenario {
     int scenario_id;
     string name;
     string obj_list;
-    int steps;
+    double time;
     string interaction_func;
     bool try_cache; //if true, check if the scenario has been run before and use the results 
     bool refresh_obj; //if true, rebuild the complex objects
+    double dt; //time step
     bool three_d; //if false, the simulation will be in 2D
 };
 
@@ -56,24 +57,28 @@ struct objects {
 
 
 
-struct snapshots {
-    //this struct will contain all the snapshots of the particles at different times
-    vector<shared_ptr<Particles>> snaps;
-};
-
-
 struct test_metrics_t {
     //this struct will contain the metrics of the test
-    double time;
+    double fps;
     double memory;
     double cpu;
     double gpu;
+    double KE;
+    double PE;
+    double TE;
+    double TE_change;
+    double TE_error;
+    double relative_error;
 };
 
-struct test_metrics {
+
+struct snapshots {
+    //this struct will contain all the snapshots of the particles at different times
+    vector<shared_ptr<Particles>> snaps;
     vector<shared_ptr<test_metrics_t>> metrics;
-};
 
+    
+};
 
 #endif // INIT_STRUCTS_H
 

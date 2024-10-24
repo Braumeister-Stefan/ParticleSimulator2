@@ -1,17 +1,24 @@
+//Author: Stephane Mertens de Wilmars
+
 // This project allows the user to simulate collissions and gravitational forces between spheres in 2D space
+//Project to be built from the Main.cpp file. For more information, please refer to the README.md file.
 
 
+//Standard libraries
+#include <memory>
+#include <iostream>
+
+//Internal libraries
 #include "Model/Model.h"
 #include "Model/include/InitStructs.h"
 
-
-#include <memory>
-
-
-
+//namespaces
 using namespace std;
 
+
 int main() {
+
+    
 
     //1. initialize the model
     ParticleModel model;
@@ -41,10 +48,10 @@ int main() {
 
     //4. validate the simulation and generate metrics
 
-    shared_ptr<test_metrics> metrics = model.metrics->compute_metrics(selected_scenario, particle_states);
+    particle_states = model.metrics->compute_metrics(selected_scenario, particle_states);
 
     //5. visualize the model results using the snapshots
-    model.plotter->plot_run(selected_scenario, particle_states, metrics);
+    model.plotter->plot_run(selected_scenario, particle_states);
 
     return 0;
     

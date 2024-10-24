@@ -45,7 +45,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    const int column_count = 7;
+    const int column_count = 8;
 
     io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(scenario_input_path);
     
@@ -54,15 +54,15 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     //scenario new_scenario;
     scenarios scenario_list;
 
-    string col1, col2, col3, col4, col5, col6, col7;
+    string col1, col2, col3, col4, col5, col6, col7, col8;
 
 
     int scenarios_loaded = 1;
 
     //discard the header row. This list is a guide to the columns in the csv file.
-    in.read_header(io::ignore_extra_column, "SCENARIO_NAME", "OBJ_LIST", "STEPS", "INTERACTION_FUNC", "TRY_CACHE", "REFRESH_OBJ", "3D");
+    in.read_header(io::ignore_extra_column, "SCENARIO_NAME", "OBJ_LIST", "TIME", "INTERACTION_FUNC", "TRY_CACHE", "REFRESH_OBJ", "DT","3D");
 
-    while(in.read_row(col1, col2, col3, col4, col5, col6, col7)) {
+    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8)) {
 
         unique_ptr<scenario> new_scenario(new scenario);
 
@@ -71,7 +71,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
         new_scenario-> name = col1;
         new_scenario-> obj_list = col2;
 
-        new_scenario-> steps = stoi(col3);
+        new_scenario-> time = stod(col3);
         
         new_scenario-> interaction_func = col4;
 
@@ -87,11 +87,15 @@ shared_ptr<scenario> Interfacer::select_scenario() {
             new_scenario-> refresh_obj = false;
         }
 
-        if (col7 == "TRUE") {
+        new_scenario-> dt = stod(col7);
+
+        if (col8 == "TRUE") {
             new_scenario-> three_d = true;
         } else {
             new_scenario-> three_d = false;
         }
+
+        
         
         //add the new scenario to the list of scenarios
         scenario_list.scenario_list.push_back(move(new_scenario));
@@ -123,10 +127,11 @@ shared_ptr<scenario> Interfacer::select_scenario() {
             cout << "Scenario ID: " << scenario_list.scenario_list[i]->scenario_id << endl;
             cout << "Name: " << scenario_list.scenario_list[i]->name << endl;
             cout << "Object List: " << scenario_list.scenario_list[i]->obj_list << endl;
-            cout << "Steps: " << scenario_list.scenario_list[i]->steps << endl;
+            cout << "Time (s): " << scenario_list.scenario_list[i]->time << endl;
             cout << "Interaction Function: " << scenario_list.scenario_list[i]->interaction_func << endl;
             cout << "Try Cache: " << scenario_list.scenario_list[i]->try_cache << endl;
             cout << "Refresh Object: " << scenario_list.scenario_list[i]->refresh_obj << endl;
+            cout << "Time Step Length: " << scenario_list.scenario_list[i]->dt << endl;
             cout << "3D: " << scenario_list.scenario_list[i]->three_d << endl;
         }
     }
