@@ -381,8 +381,8 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
                         }
 
                     } else {
-                        cout << "Could not apply energy correction!" << endl;
-                        cout << "TE error before energy correction: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij << endl;
+                        //cout << "Could not apply energy correction!" << endl;
+                        //cout << "TE error before energy correction: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij << endl;
                     }
                 }
 
@@ -569,177 +569,177 @@ double Engine::impulse_pair(shared_ptr<Particle> p1, shared_ptr<Particle> p2) {
 }
 
 
-double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
-    // Define the dot product function locally within this function
+// double Engine::backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
+//     // Define the dot product function locally within this function. Old method of overlap resolution. Lead to artefacts
     
 
-    // This function will backtrack two particles to the point of collision
-    // and return the amount of time of the timestep that was left.
+//     // This function will backtrack two particles to the point of collision
+//     // and return the amount of time of the timestep that was left.
 
-    // 1. Store particle positions and velocities in 2D
-    // Vector2D pos1 = { particle1->x, particle1->y };
-    // Vector2D pos2 = { particle2->x, particle2->y };
-    // Vector2D vel1 = { particle1->vx, particle1->vy };
-    // Vector2D vel2 = { particle2->vx, particle2->vy };
+//     // 1. Store particle positions and velocities in 2D
+//     // Vector2D pos1 = { particle1->x, particle1->y };
+//     // Vector2D pos2 = { particle2->x, particle2->y };
+//     // Vector2D vel1 = { particle1->vx, particle1->vy };
+//     // Vector2D vel2 = { particle2->vx, particle2->vy };
 
-    Vector2D pos1 = { high_prec(particle1->x), high_prec(particle1->y) };
-    Vector2D pos2 = { high_prec(particle2->x), high_prec(particle2->y) };
-    Vector2D vel1 = { high_prec(particle1->vx), high_prec(particle1->vy) };
-    Vector2D vel2 = { high_prec(particle2->vx), high_prec(particle2->vy) };
-
-
-    // cout << "pos1: " << pos1.x << ", " << pos1.y << endl;
-    // cout << "pos2: " << pos2.x << ", " << pos2.y << endl;
-    // cout << "vel1: " << vel1.x << ", " << vel1.y << endl;
-    // cout << "vel2: " << vel2.x << ", " << vel2.y << endl;
+//     Vector2D pos1 = { high_prec(particle1->x), high_prec(particle1->y) };
+//     Vector2D pos2 = { high_prec(particle2->x), high_prec(particle2->y) };
+//     Vector2D vel1 = { high_prec(particle1->vx), high_prec(particle1->vy) };
+//     Vector2D vel2 = { high_prec(particle2->vx), high_prec(particle2->vy) };
 
 
+//     // cout << "pos1: " << pos1.x << ", " << pos1.y << endl;
+//     // cout << "pos2: " << pos2.x << ", " << pos2.y << endl;
+//     // cout << "vel1: " << vel1.x << ", " << vel1.y << endl;
+//     // cout << "vel2: " << vel2.x << ", " << vel2.y << endl;
 
 
-    //double distance_pre = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
-    high_prec distance_pre = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
-    //cout << "Distance before collission: " << distance_pre << endl;
+
+
+//     //double distance_pre = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
+//     high_prec distance_pre = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
+//     //cout << "Distance before collission: " << distance_pre << endl;
 
 
    
 
-    // 2. Calculate relative velocity and position difference
-    Vector2D rel_pos = pos2 - pos1;
+//     // 2. Calculate relative velocity and position difference
+//     Vector2D rel_pos = pos2 - pos1;
 
-    //check if rel_pos is zero
-    //if (rel_pos.x == 0 && rel_pos.y == 0) {
-    //    cout << "rel_pos is zero" << endl;
+//     //check if rel_pos is zero
+//     //if (rel_pos.x == 0 && rel_pos.y == 0) {
+//     //    cout << "rel_pos is zero" << endl;
         
-    //}
+//     //}
 
-    //cout << "rel_pos: " << rel_pos.x << ", " << rel_pos.y << endl;
-    Vector2D rel_vel = vel2 - vel1;
-    //cout << "rel_vel: " << rel_vel.x << ", " << rel_vel.y << endl;
+//     //cout << "rel_pos: " << rel_pos.x << ", " << rel_pos.y << endl;
+//     Vector2D rel_vel = vel2 - vel1;
+//     //cout << "rel_vel: " << rel_vel.x << ", " << rel_vel.y << endl;
 
-    //check if rel_vel is zero
-    if (rel_vel.x == 0 && rel_vel.y == 0) {
-        cout << "rel_vel is zero" << endl;
-        //add a very small positive value to the first particle's x velocity
-        particle1->vx += 0.0000000001;
+//     //check if rel_vel is zero
+//     if (rel_vel.x == 0 && rel_vel.y == 0) {
+//         cout << "rel_vel is zero" << endl;
+//         //add a very small positive value to the first particle's x velocity
+//         particle1->vx += 0.0000000001;
         
-    }
+//     }
 
-    // 3. Calculate quadratic terms for collision detection with high precision
-    high_prec a = dot(rel_vel, rel_vel);  // Coefficient of t^2
+//     // 3. Calculate quadratic terms for collision detection with high precision
+//     high_prec a = dot(rel_vel, rel_vel);  // Coefficient of t^2
 
-    //cout << "a: " << a << endl;
+//     //cout << "a: " << a << endl;
 
-    high_prec b = 2 * dot(rel_pos, rel_vel);  // Coefficient of t
+//     high_prec b = 2 * dot(rel_pos, rel_vel);  // Coefficient of t
 
-    //cout << "b: " << b << endl;
+//     //cout << "b: " << b << endl;
 
-    high_prec c = dot(rel_pos, rel_pos) - pow(particle1->rad + particle2->rad, 2);  // Constant term
+//     high_prec c = dot(rel_pos, rel_pos) - pow(particle1->rad + particle2->rad, 2);  // Constant term
 
-    //cout << "c: " << c << endl;
+//     //cout << "c: " << c << endl;
 
-    // 4. Solve quadratic equation for time of collision
-    high_prec discriminant = b * b - 4 * a * c;
+//     // 4. Solve quadratic equation for time of collision
+//     high_prec discriminant = b * b - 4 * a * c;
 
-    //cout << "Discriminant: " << discriminant << endl;
+//     //cout << "Discriminant: " << discriminant << endl;
 
-    if (discriminant < 0) {
-        // No collision occurs
-        return 1.0;  // Full timestep remains
-    }
+//     if (discriminant < 0) {
+//         // No collision occurs
+//         return 1.0;  // Full timestep remains
+//     }
 
-    high_prec sqrt_discriminant = sqrt(discriminant);
-    high_prec t_collision1 = (-b - sqrt_discriminant) / (2 * a);
-    high_prec t_collision2 = (-b + sqrt_discriminant) / (2 * a);
+//     high_prec sqrt_discriminant = sqrt(discriminant);
+//     high_prec t_collision1 = (-b - sqrt_discriminant) / (2 * a);
+//     high_prec t_collision2 = (-b + sqrt_discriminant) / (2 * a);
 
-    //cout << "t_collision1: " << t_collision1 << endl;
-    //cout << "t_collision2: " << t_collision2 << endl;
+//     //cout << "t_collision1: " << t_collision1 << endl;
+//     //cout << "t_collision2: " << t_collision2 << endl;
 
-    // Use the value for t_collission closest to 0
+//     // Use the value for t_collission closest to 0
 
-    high_prec t_collission1_distfrom0 = abs(t_collision1);
-    high_prec t_collission2_distfrom0 = abs(t_collision2);
-
-
+//     high_prec t_collission1_distfrom0 = abs(t_collision1);
+//     high_prec t_collission2_distfrom0 = abs(t_collision2);
 
 
-    high_prec t_collision;
-    if (t_collission1_distfrom0 < t_collission2_distfrom0) {
-        // Use t_collision1
 
-        t_collision = t_collision1;
+
+//     high_prec t_collision;
+//     if (t_collission1_distfrom0 < t_collission2_distfrom0) {
+//         // Use t_collision1
+
+//         t_collision = t_collision1;
         
-    }
-    else {
+//     }
+//     else {
 
-        t_collision = t_collision2;
+//         t_collision = t_collision2;
   
-    }
+//     }
 
     
       
 
 
 
-    // 5. Backtrack positions to collision point
+//     // 5. Backtrack positions to collision point
 
-    //cout << "pos1 before backtrack: " << pos1.x << ", " << pos1.y << endl;
+//     //cout << "pos1 before backtrack: " << pos1.x << ", " << pos1.y << endl;
 
-    pos1 = pos1 + t_collision * vel1;
-    pos2 = pos2 + t_collision * vel2;
+//     pos1 = pos1 + t_collision * vel1;
+//     pos2 = pos2 + t_collision * vel2;
 
-    //cout << "pos1 after backtrack: " << pos1.x << ", " << pos1.y << endl;
+//     //cout << "pos1 after backtrack: " << pos1.x << ", " << pos1.y << endl;
 
-    particle1->x = pos1.x.convert_to<double>();  // Convert back to double for storage
-    particle1->y = pos1.y.convert_to<double>();
-    particle2->x = pos2.x.convert_to<double>();
-    particle2->y = pos2.y.convert_to<double>();
+//     particle1->x = pos1.x.convert_to<double>();  // Convert back to double for storage
+//     particle1->y = pos1.y.convert_to<double>();
+//     particle2->x = pos2.x.convert_to<double>();
+//     particle2->y = pos2.y.convert_to<double>();
 
-    //debug: validate that distance is equal to the sum of the radii if not, print the values
-    //double distance = sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2)); old formula for distance which is less precise
+//     //debug: validate that distance is equal to the sum of the radii if not, print the values
+//     //double distance = sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2)); old formula for distance which is less precise
 
-    high_prec distance = hypot(pos1.x - pos2.x, pos1.y - pos2.y);
-    high_prec distance_error = abs(distance - (particle1->rad + particle2->rad));
+//     high_prec distance = hypot(pos1.x - pos2.x, pos1.y - pos2.y);
+//     high_prec distance_error = abs(distance - (particle1->rad + particle2->rad));
 
-    double tolerance_distance = 0.0000000001;
-        //print in scientific notation
+//     double tolerance_distance = 0.0000000001;
+//         //print in scientific notation
 
-    if (distance_error > tolerance_distance) {
-        cout << "Distance error: " << scientific << distance_error << endl;
+//     if (distance_error > tolerance_distance) {
+//         cout << "Distance error: " << scientific << distance_error << endl;
         
-    }
+//     }
 
-    //cout << "Distance after collission: " << distance << endl;
+//     //cout << "Distance after collission: " << distance << endl;
 
-    // 6. Calculate the time scaler
-    //double time_scaler = 1.0 - t_collision.convert_to<double>();  // Remaining time in the timestep
+//     // 6. Calculate the time scaler
+//     //double time_scaler = 1.0 - t_collision.convert_to<double>();  // Remaining time in the timestep
 
-    double time_scaler = 1.0;
+//     double time_scaler = 1.0;
 
-    //something is wrong here which creates massive time_scaler values. 
+//     //something is wrong here which creates massive time_scaler values. 
 
-    //cout << "Time scaler: " << time_scaler << endl;
+//     //cout << "Time scaler: " << time_scaler << endl;
 
-    //if scaler is larger than 2, print the values
+//     //if scaler is larger than 2, print the values
 
-    if (time_scaler > 2) {
-        cout << "Time scaler is larger than 2" << endl;
-        cout << "t_collision: " << t_collision << endl;
-        cout << "a: " << a << endl;
-        cout << "b: " << b << endl;
-        cout << "c: " << c << endl;
-        cout << "discriminant: " << discriminant << endl;
-        cout << "sqrt_discriminant: " << sqrt_discriminant << endl;
-        cout << "t_collision1: " << t_collision1 << endl;
-        cout << "t_collision2: " << t_collision2 << endl;
-        cout << "t_collission1_distfrom0: " << t_collission1_distfrom0 << endl;
-        cout << "t_collission2_distfrom0: " << t_collission2_distfrom0 << endl;
-        cout << "new distance: " << distance << endl;
-        cout << "distance_error: " << distance_error << endl;
-        //cout << "tolerance_distance: " << tolerance_distance << endl;
-    }
+//     if (time_scaler > 2) {
+//         cout << "Time scaler is larger than 2" << endl;
+//         cout << "t_collision: " << t_collision << endl;
+//         cout << "a: " << a << endl;
+//         cout << "b: " << b << endl;
+//         cout << "c: " << c << endl;
+//         cout << "discriminant: " << discriminant << endl;
+//         cout << "sqrt_discriminant: " << sqrt_discriminant << endl;
+//         cout << "t_collision1: " << t_collision1 << endl;
+//         cout << "t_collision2: " << t_collision2 << endl;
+//         cout << "t_collission1_distfrom0: " << t_collission1_distfrom0 << endl;
+//         cout << "t_collission2_distfrom0: " << t_collission2_distfrom0 << endl;
+//         cout << "new distance: " << distance << endl;
+//         cout << "distance_error: " << distance_error << endl;
+//         //cout << "tolerance_distance: " << tolerance_distance << endl;
+//     }
 
-    return time_scaler;
-}
+//     return time_scaler;
+// }
 
 
 
@@ -783,81 +783,81 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
 }
 
 
-void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {
-    // This function resolves the gravitational attraction between particles using Euler's method
+// void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {
+//     // This function resolves the gravitational attraction between particles using Euler's method. Not sufficiently accurate for energy conservation.
 
-    // Define a small value to avoid division by zero
+//     // Define a small value to avoid division by zero
 
-    high_prec epsilon = 0.0000001;
+//     high_prec epsilon = 0.0000001;
 
-    // Loop through the particles
-    for (int i = 0; i < particles->particle_list.size(); i++) {
-        for (int j = i + 1; j < particles->particle_list.size(); j++) {
-            // Skip self-interaction
-            if (i == j) continue;
+//     // Loop through the particles
+//     for (int i = 0; i < particles->particle_list.size(); i++) {
+//         for (int j = i + 1; j < particles->particle_list.size(); j++) {
+//             // Skip self-interaction
+//             if (i == j) continue;
 
-            // Calculate the distance between particles i and j
-            high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
-            high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
-            high_prec distance = hypot(dx, dy);
+//             // Calculate the distance between particles i and j
+//             high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+//             high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
+//             high_prec distance = hypot(dx, dy);
 
-            if (distance < epsilon) {
+//             if (distance < epsilon) {
                 
-                distance = epsilon;
-            }
+//                 distance = epsilon;
+//             }
 
-            // Calculate the gravitational force magnitude
-            high_prec force = G * particles->particle_list[i]->m * particles->particle_list[j]->m / (distance * distance);
+//             // Calculate the gravitational force magnitude
+//             high_prec force = G * particles->particle_list[i]->m * particles->particle_list[j]->m / (distance * distance);
 
-            // Calculate the components of the force
-            high_prec fx = force * (dx / distance);
-            high_prec fy = force * (dy / distance);
+//             // Calculate the components of the force
+//             high_prec fx = force * (dx / distance);
+//             high_prec fy = force * (dy / distance);
 
-            // Calculate KE, PE, and TE for the system of i and j before the force update, all are magnitudes
-            high_prec KE_pre = 0.5 * particles->particle_list[i]->m * (pow(particles->particle_list[i]->vx, 2) + pow(particles->particle_list[i]->vy, 2)) +
-                               0.5 * particles->particle_list[j]->m * (pow(particles->particle_list[j]->vx, 2) + pow(particles->particle_list[j]->vy, 2));
-            high_prec PE_pre = -G * particles->particle_list[i]->m * particles->particle_list[j]->m / distance;
-            high_prec TE_pre = KE_pre + PE_pre;
+//             // Calculate KE, PE, and TE for the system of i and j before the force update, all are magnitudes
+//             high_prec KE_pre = 0.5 * particles->particle_list[i]->m * (pow(particles->particle_list[i]->vx, 2) + pow(particles->particle_list[i]->vy, 2)) +
+//                                0.5 * particles->particle_list[j]->m * (pow(particles->particle_list[j]->vx, 2) + pow(particles->particle_list[j]->vy, 2));
+//             high_prec PE_pre = -G * particles->particle_list[i]->m * particles->particle_list[j]->m / distance;
+//             high_prec TE_pre = KE_pre + PE_pre;
 
 
 
-            // Update the velocities of both particles to conserve momentum
-            particles->particle_list[i]->vx += (fx / particles->particle_list[i]->m).convert_to<double>() * dt;
-            particles->particle_list[i]->vy += (fy / particles->particle_list[i]->m).convert_to<double>() * dt;
+//             // Update the velocities of both particles to conserve momentum
+//             particles->particle_list[i]->vx += (fx / particles->particle_list[i]->m).convert_to<double>() * dt;
+//             particles->particle_list[i]->vy += (fy / particles->particle_list[i]->m).convert_to<double>() * dt;
 
-            particles->particle_list[j]->vx -= (fx / particles->particle_list[j]->m).convert_to<double>() * dt;
-            particles->particle_list[j]->vy -= (fy / particles->particle_list[j]->m).convert_to<double>() * dt;
+//             particles->particle_list[j]->vx -= (fx / particles->particle_list[j]->m).convert_to<double>() * dt;
+//             particles->particle_list[j]->vy -= (fy / particles->particle_list[j]->m).convert_to<double>() * dt;
 
-            // Recalculate distance based on new positions
-            high_prec new_dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
-            high_prec new_dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
-            high_prec new_distance = hypot(new_dx, new_dy);
-
-            
-            // Calculate KE, PE, and TE for the system of i and j after the force update using new distance
-            high_prec KE_post = 0.5 * particles->particle_list[i]->m * (pow(particles->particle_list[i]->vx, 2) + pow(particles->particle_list[i]->vy, 2)) +
-                                0.5 * particles->particle_list[j]->m * (pow(particles->particle_list[j]->vx, 2) + pow(particles->particle_list[j]->vy, 2));
-
-            high_prec PE_post = -G * particles->particle_list[i]->m * particles->particle_list[j]->m / new_distance;
-
-            high_prec TE_post = KE_post + PE_post;
+//             // Recalculate distance based on new positions
+//             high_prec new_dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+//             high_prec new_dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
+//             high_prec new_distance = hypot(new_dx, new_dy);
 
             
-            // Calculate the difference in total energy before and after the force update
-            high_prec TE_diff = TE_post - TE_pre;
-            high_prec TE_error = TE_diff / TE_pre;
+//             // Calculate KE, PE, and TE for the system of i and j after the force update using new distance
+//             high_prec KE_post = 0.5 * particles->particle_list[i]->m * (pow(particles->particle_list[i]->vx, 2) + pow(particles->particle_list[i]->vy, 2)) +
+//                                 0.5 * particles->particle_list[j]->m * (pow(particles->particle_list[j]->vx, 2) + pow(particles->particle_list[j]->vy, 2));
 
-            // Threshold for the error
-            high_prec TE_error_threshold = 0.1; // Lower threshold for higher precision
+//             high_prec PE_post = -G * particles->particle_list[i]->m * particles->particle_list[j]->m / new_distance;
 
-            // If the error is greater than the threshold, print the error and distance
-            if (abs(TE_error) > TE_error_threshold) {
-                cout << "Distance: " << distance << endl;
-                cout << "TE error %: " << TE_error * 100 << "%" << endl;
-            }
-        }
-    }
-}
+//             high_prec TE_post = KE_post + PE_post;
+
+            
+//             // Calculate the difference in total energy before and after the force update
+//             high_prec TE_diff = TE_post - TE_pre;
+//             high_prec TE_error = TE_diff / TE_pre;
+
+//             // Threshold for the error
+//             high_prec TE_error_threshold = 0.1; // Lower threshold for higher precision
+
+//             // If the error is greater than the threshold, print the error and distance
+//             if (abs(TE_error) > TE_error_threshold) {
+//                 cout << "Distance: " << distance << endl;
+//                 cout << "TE error %: " << TE_error * 100 << "%" << endl;
+//             }
+//         }
+//     }
+// }
 
 void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
     // This function resolves the gravitational attraction between particles using the full Velocity Verlet integration scheme

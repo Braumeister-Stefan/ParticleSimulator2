@@ -140,12 +140,15 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
     fprintf(gnuplotPipe, "set label 3 'KE: %f' at screen 0.01,0.90\n", metrics_t->KE);
     fprintf(gnuplotPipe, "set label 4 'PE: %f' at screen 0.01,0.85\n", metrics_t->PE);
     fprintf(gnuplotPipe, "set label 5 'TE: %f' at screen 0.01,0.80\n", metrics_t->TE);
-    //fprintf(gnuplotPipe, "set label 6 'TE Change: %f' at screen 0.01,0.75\n", metrics_t->TE_change);
+    fprintf(gnuplotPipe, "set label 6 'Momentum: %f' at screen 0.01,0.75\n", metrics_t->mom);
+    fprintf(gnuplotPipe, "set label 7 'Mom Change: %f' at screen 0.01,0.70\n", metrics_t->mom_change);
+    fprintf(gnuplotPipe, "set label 8 'Relative Error: %f' at screen 0.01,0.65\n", metrics_t->relative_error);
 
     //format by dividing by /1000 and calling it K
-    fprintf(gnuplotPipe, "set label 6 'Aggregate TE Error: %f K' at screen 0.01,0.75\n", metrics_t->TE_error / 1000);
+    //fprintf(gnuplotPipe, "set label 8 'Aggregate TE Error: %f K' at screen 0.01,0.75\n", metrics_t->TE_error / 1000);
 
-    fprintf(gnuplotPipe, "set label 7 'Relative TE Error: %f' at screen 0.01,0.70\n", metrics_t->relative_error);
+    //fprintf(gnuplotPipe, "set label 8 ' TE Error: %f %' at screen 0.01,0.70\n", metrics_t->relative_error);
+
 
 
     

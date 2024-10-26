@@ -66,6 +66,8 @@ struct test_metrics_t {
     double KE;
     double PE;
     double TE;
+    double mom;
+    double mom_change;
     double TE_change;
     double TE_error;
     double relative_error;

@@ -37,8 +37,9 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
     double dt = scenario->dt;  // Time step length
 
     double TE_error_threshold = 0.01;  // Threshold for total energy error
+    double mom_change_threshold = 0.01;
 
-    double total_TE_error = 0.0;  // Variable to store aggregated TE_error
+    
 
     // Loop through the snapshots and compute the metrics
     for (int i = 0; i < particle_states->snaps.size(); i++) {
@@ -67,6 +68,31 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
             }
         }
 
+        //Compute the momentum of the system
+        double momentum = 0;
+
+        for (int j = 0; j < particle_states->snaps[i]->particle_list.size(); j++) {
+            momentum += particle_states->snaps[i]->particle_list[j]->m * sqrt(pow(particle_states->snaps[i]->particle_list[j]->vx, 2) + pow(particle_states->snaps[i]->particle_list[j]->vy, 2) + pow(particle_states->snaps[i]->particle_list[j]->vz, 2));
+        }
+
+        // Store the momentum in the metrics object
+        particle_states->metrics[i]->mom = momentum;
+
+        // Calculate the change in momentum relative to the first snapshot
+        if (i == 0) {
+            particle_states->metrics[i]->mom_change = 0;
+        } else {
+            double initial_momentum = particle_states->metrics[0]->mom;
+        if (initial_momentum != 0) {
+                particle_states->metrics[i]->mom_change = (momentum - initial_momentum) / initial_momentum;
+            } else {
+                particle_states->metrics[i]->mom_change = 0;  // Handle division by zero by setting to 0
+                cout << "Warning: Initial momentum is zero. Momentum change set to 0 to avoid division by zero." << endl;
+            }
+            cout << "Momentum change: " << particle_states->metrics[i]->mom_change << endl;
+        }
+        
+
         // Store the potential energy in the metrics object
         particle_states->metrics[i]->PE = potential_energy;
 
@@ -74,6 +100,7 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         double total_energy = kinetic_energy + potential_energy;
         particle_states->metrics[i]->TE = total_energy;
 
+        double total_TE_error = 0.0;  // Variable to store aggregated TE_error
         // Calculate TE_change relative to the first snapshot
         if (i == 0) {
             particle_states->metrics[i]->TE_change = 0;
@@ -86,8 +113,7 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         if (i > 0) {
             double te_error = particle_states->metrics[i]->TE - particle_states->metrics[i - 1]->TE;
             particle_states->metrics[i]->TE_error = particle_states->metrics[i-1]->TE_error + fabs(te_error);
-            //total_TE_error += fabs(te_error);  // Aggregate absolute value of TE_error
-            //cout << "Total aggregated TE_error: " << particle_states->metrics[i]->TE_error << endl;
+
 
             // Calculate relative error as the ratio of TE_error to the initial TE
             particle_states->metrics[i]->relative_error = particle_states->metrics[i]->TE_error / particle_states->metrics[0]->TE;
@@ -99,7 +125,7 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
             particle_states->metrics[i]->relative_error = 0;
         }
 
-        //cout << "TE_error (relative): " << particle_states->metrics[i]->relative_error << endl;
+        
     }
 
     double relative_final_error = particle_states->metrics[particle_states->snaps.size() - 1]->relative_error;
@@ -110,20 +136,32 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
     } else {
         cout << "Total Energy Error (" << relative_final_error*100 << "%) within threshold of " << TE_error_threshold *100 <<"%"<< endl;
     }
+
+    //check if relative momentum change is within threshold
+    double relative_mom_change = particle_states->metrics[particle_states->snaps.size() - 1]->mom_change;
+
+
+    if (abs(relative_mom_change) > mom_change_threshold) {
+        cout << "Momentum change (" << relative_mom_change*100 << "%) exceeds threshold of " << mom_change_threshold*100 <<"%"<< endl;
+    } else {
+        cout << "Momentum change (" << relative_mom_change*100 << "%) within threshold of " << mom_change_threshold *100 <<"%"<< endl;
+    }
     
 
     
 
-    // Average the fps metrics every 10 snapshots to smooth the curve
+    // Calculate the rolling average by considering the last `fps_smoothing_window` frames
+    int fps_smoothing_window = 30/ dt;  // Number of frames to consider for smoothing
     for (int i = 0; i < particle_states->metrics.size(); i++) {
-        if (i % 10 == 0) {
-            double avg_fps = 0;
-            for (int j = 0; j < 10 && (i + j) < particle_states->metrics.size(); j++) {
-                avg_fps += particle_states->metrics[i + j]->fps;
-            }
-            avg_fps /= 10;
-            particle_states->metrics[i]->fps = avg_fps;
+        double avg_fps = 0;
+        int count = 0;
+        
+        for (int j = i; j >= 0 && j > i - fps_smoothing_window; j--) {
+            avg_fps += particle_states->metrics[j]->fps;
+            count++;
         }
+        // Update the FPS with the averaged value for smoother data
+        particle_states->metrics[i]->fps = avg_fps / count;
     }
 
     // Placeholder: If metrics is a null pointer, create a new metrics object and fill with zeros
