@@ -32,16 +32,13 @@ public:
 
     //Functions to resolve overlap between particles
     bool resolve_overlap(shared_ptr<Particles> particles);
+    void resolve_overlap_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
     
-    //functions to resolve overlap between a pair of particles
-    double backtrack_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
-    double impulse_pair(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+
+    
 
     //Functions to resolve collissions between particles
     void resolve_collisions(shared_ptr<Particles> particles);
-
-    
-
 
 
     void resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
@@ -63,6 +60,10 @@ public:
 
     //Function to validate TE
     double calc_TE(shared_ptr<Particles> particles);
+    double calc_TE_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+
+    double calc_mom(shared_ptr<Particles> particles);
+    double calc_mom_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
     
 };
 

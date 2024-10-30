@@ -87,9 +87,9 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
                 particle_states->metrics[i]->mom_change = (momentum - initial_momentum) / initial_momentum;
             } else {
                 particle_states->metrics[i]->mom_change = 0;  // Handle division by zero by setting to 0
-                cout << "Warning: Initial momentum is zero. Momentum change set to 0 to avoid division by zero." << endl;
+                //cout << "Warning: Initial momentum is zero. Momentum change set to 0 to avoid division by zero." << endl;
             }
-            cout << "Momentum change: " << particle_states->metrics[i]->mom_change << endl;
+            //cout << "Momentum change: " << particle_states->metrics[i]->mom_change << endl;
         }
         
 

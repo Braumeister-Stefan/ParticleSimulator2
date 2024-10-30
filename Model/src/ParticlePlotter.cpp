@@ -66,7 +66,7 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
         plot_GNU(particle_states->snaps[i], particle_states->metrics[i]);
 
-        fprintf(gnuplotPipe, "set label 1 'Step: %d' at screen 0.01,0.01\n", i + 1);
+        fprintf(gnuplotPipe, "set label 1 'Step: %d' at screen 0.01,0.95 textcolor rgb 'white'\n", i + 1);
         fflush(gnuplotPipe);
     }
 
@@ -87,7 +87,8 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     gnuplotPipe = popen("gnuplot -persistent", "w");
 
     //set some basic parameters for the plot, based on the scenario
-    fprintf(gnuplotPipe, "set title '%s' font 'Arial Bold,16'\n", scenario->name.c_str());
+    
+    fprintf(gnuplotPipe, "set title '%s' font 'Arial Bold,16' textcolor rgb 'white'\n", scenario->name.c_str());
     
 
     //set some basic parameters that are independent of the scenario
@@ -101,10 +102,13 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     //ensure objects are filled
     fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
 
+    //to have the plot background darkmode
+    fprintf(gnuplotPipe, "set terminal wxt background '#000000'\n");
+
+    //to hide the legend
+    fprintf(gnuplotPipe, "unset key\n");
 
     fflush(gnuplotPipe);
-
-    
 
     
 }
@@ -118,8 +122,8 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     //2. plot the particles
 
-    //fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable\n");
-    fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable fs empty\n");//for debugging you can use hollow circles
+    fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable\n");
+    //fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable fs empty\n");//for debugging you can use hollow circles
     for (int i = 0; i < particles->particle_list.size(); i++) {
 
         //set radius of the point using the rad field
@@ -134,15 +138,19 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
     //tell gnuplot that the data input for this snapshot has ended
     fprintf(gnuplotPipe, "e\n");
 
-    //3. update the metrics on the plot , currently only fps is being displayed
-    fprintf(gnuplotPipe, "set label 2 'FPS: %f' at screen 0.01,0.95\n", metrics_t->fps);
-    //print the KE and PE and TE
-    fprintf(gnuplotPipe, "set label 3 'KE: %f' at screen 0.01,0.90\n", metrics_t->KE);
-    fprintf(gnuplotPipe, "set label 4 'PE: %f' at screen 0.01,0.85\n", metrics_t->PE);
-    fprintf(gnuplotPipe, "set label 5 'TE: %f' at screen 0.01,0.80\n", metrics_t->TE);
-    fprintf(gnuplotPipe, "set label 6 'Momentum: %f' at screen 0.01,0.75\n", metrics_t->mom);
-    fprintf(gnuplotPipe, "set label 7 'Mom Change: %f' at screen 0.01,0.70\n", metrics_t->mom_change);
-    fprintf(gnuplotPipe, "set label 8 'Relative Error: %f' at screen 0.01,0.65\n", metrics_t->relative_error);
+    //3. update the metrics on the plot
+
+    //print number of particles
+    
+    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n", particles->particle_list.size());
+    fprintf(gnuplotPipe, "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n", metrics_t->fps);
+    fprintf(gnuplotPipe, "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n", metrics_t->KE/1000);
+    fprintf(gnuplotPipe, "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n", metrics_t->PE/1000);
+    fprintf(gnuplotPipe, "set label 6 'TE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n", metrics_t->TE/1000);
+    fprintf(gnuplotPipe, "set label 7 'Momentum= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n", metrics_t->mom/1000);
+    fprintf(gnuplotPipe, "set label 8 'Mom Change= %f' at screen 0.01,0.60 textcolor rgb 'white'\n", metrics_t->mom_change);
+    fprintf(gnuplotPipe, "set label 9 'Relative Error= %f' at screen 0.01,0.55 textcolor rgb 'white'\n", metrics_t->relative_error);
+
 
     //format by dividing by /1000 and calling it K
     //fprintf(gnuplotPipe, "set label 8 'Aggregate TE Error: %f K' at screen 0.01,0.75\n", metrics_t->TE_error / 1000);
