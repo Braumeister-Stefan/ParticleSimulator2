@@ -381,8 +381,8 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
                         }
 
                     } else {
-                        //cout << "Could not apply energy correction!" << endl;
-                        //cout << "TE error before energy correction: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij << endl;
+                        cout << "Could not apply energy correction!" << endl;
+                        cout << "TE error before energy correction: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij << endl;
                     }
                 }
 
