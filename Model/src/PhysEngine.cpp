@@ -242,8 +242,153 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
                 no_overlap = false;
                 pair_count++;
 
+<<<<<<< HEAD
                 // Call the core function to resolve overlap between particles i and j
                 resolve_overlap_ij(particles->particle_list[i], particles->particle_list[j]);
+=======
+                // Store pre-resolution positions and velocities using high_prec
+                high_prec x1_before = particles->particle_list[i]->x;
+                high_prec y1_before = particles->particle_list[i]->y;
+                high_prec x2_before = particles->particle_list[j]->x;
+                high_prec y2_before = particles->particle_list[j]->y;
+                high_prec vx1_before = particles->particle_list[i]->vx;
+                high_prec vy1_before = particles->particle_list[i]->vy;
+                high_prec vx2_before = particles->particle_list[j]->vx;
+                high_prec vy2_before = particles->particle_list[j]->vy;
+
+                high_prec TE_pre_ij = calc_TE(particles);
+
+                // Compute masses
+                high_prec m1 = particles->particle_list[i]->m;
+                high_prec m2 = particles->particle_list[j]->m;
+
+                // Compute overlap
+                high_prec dx = x2_before - x1_before;
+                high_prec dy = y2_before - y1_before;
+                high_prec distance = hypot(dx, dy);
+
+                // Avoid division by zero
+                if (distance == 0.0) {
+                    dx = 0.001 * (rand() / (double)RAND_MAX - 0.5);
+                    dy = 0.001 * (rand() / (double)RAND_MAX - 0.5);
+                    distance = hypot(dx, dy);
+                }
+
+                high_prec overlap = (particles->particle_list[i]->rad + particles->particle_list[j]->rad) - distance;
+
+                // Compute collision normal
+                high_prec nx = dx / distance;
+                high_prec ny = dy / distance;
+
+                // Compute the displacement for each particle
+                high_prec total_mass = m1 + m2;
+                high_prec d1 = (overlap * m2) / total_mass;
+                high_prec d2 = (overlap * m1) / total_mass;
+
+                // Move particles proportionally to their masses to resolve overlap
+                particles->particle_list[i]->x = (x1_before - nx * d1).convert_to<double>();
+                particles->particle_list[i]->y = (y1_before - ny * d1).convert_to<double>();
+                particles->particle_list[j]->x = (x2_before + nx * d2).convert_to<double>();
+                particles->particle_list[j]->y = (y2_before + ny * d2).convert_to<double>();
+
+                // **Adjust velocities to conserve momentum and energy**
+
+                // Compute relative velocity along the normal
+                high_prec rel_vel = (vx2_before - vx1_before) * nx + (vy2_before - vy1_before) * ny;
+
+                // Compute impulse scalar
+                high_prec e = (particles->particle_list[i]->rest + particles->particle_list[j]->rest) / 2.0; // Average restitution
+                high_prec impulse = (-(1 + e) * rel_vel) / (1 / m1 + 1 / m2);
+
+                // Apply impulse to particles
+                high_prec vx1_new = vx1_before - (impulse / m1) * nx;
+                high_prec vy1_new = vy1_before - (impulse / m1) * ny;
+                high_prec vx2_new = vx2_before + (impulse / m2) * nx;
+                high_prec vy2_new = vy2_before + (impulse / m2) * ny;
+          
+
+
+                // Update particle velocities
+                particles->particle_list[i]->vx = vx1_new.convert_to<double>();
+                particles->particle_list[i]->vy = vy1_new.convert_to<double>();
+                particles->particle_list[j]->vx = vx2_new.convert_to<double>();
+                particles->particle_list[j]->vy = vy2_new.convert_to<double>();
+
+                // **Compute energies after**
+
+                high_prec TE_post_ij = calc_TE(particles);
+
+                if (TE_post_ij != TE_pre_ij) {
+                    // Momentum should be conserved, so Pn_new = Pn
+                    // Energy should be adjusted to TE_pre_ij
+
+                    // Compute the energy difference
+                    high_prec delta_E = TE_pre_ij - TE_post_ij;
+
+                    // Compute velocities along the collision normal
+                    high_prec v1n = vx1_new * nx + vy1_new * ny;
+                    high_prec v2n = vx2_new * nx + vy2_new * ny;
+
+                    // Compute the total momentum along the normal
+                    high_prec Pn = m1 * v1n + m2 * v2n;
+
+                    // delta_v2n = -(m1 / m2) * delta_v1n (from conservation of momentum)
+
+                    // Set up the quadratic equation:
+                    // m1 * (v1n - v2n) * delta_v1n + 0.5 * delta_v1n^2 * m1 * (1 + m1 / m2) = delta_E
+
+                    // Coefficients for the quadratic equation: a * delta_v1n^2 + b * delta_v1n + c = 0
+                    high_prec a = 0.5 * m1 * (1 + m1 / m2);
+                    high_prec b = m1 * (v1n - v2n);
+                    high_prec c = -delta_E;
+
+                    // Solve the quadratic equation for delta_v1n
+                    high_prec discriminant = b * b - 4 * a * c;
+
+                    if (discriminant >= 0) {
+                        high_prec sqrt_discriminant = sqrt(discriminant);
+                        high_prec delta_v1n1 = (-b + sqrt_discriminant) / (2 * a);
+                        high_prec delta_v1n2 = (-b - sqrt_discriminant) / (2 * a);
+
+                        // Choose the solution that results in smaller adjustment
+                        high_prec delta_v1n = abs(delta_v1n1) < abs(delta_v1n2) ? delta_v1n1 : delta_v1n2;
+
+                        // Compute delta_v2n
+                        high_prec delta_v2n = -(m1 / m2) * delta_v1n;
+
+                        // Adjust the normal components of velocities
+                        high_prec v1n_new = v1n + delta_v1n;
+                        high_prec v2n_new = v2n + delta_v2n;
+
+                        // Compute the tangential components (unchanged)
+                        high_prec v1t = vx1_new * (-ny) + vy1_new * nx;
+                        high_prec v2t = vx2_new * (-ny) + vy2_new * nx;
+
+                        // Reconstruct the velocities
+                        particles->particle_list[i]->vx = (v1n_new * nx - v1t * ny).convert_to<double>();
+                        particles->particle_list[i]->vy = (v1n_new * ny + v1t * nx).convert_to<double>();
+                        particles->particle_list[j]->vx = (v2n_new * nx - v2t * ny).convert_to<double>();
+                        particles->particle_list[j]->vy = (v2n_new * ny + v2t * nx).convert_to<double>();
+
+                        // Calculate the new total energy
+
+                        
+                        high_prec TE_post_ij_corrected = calc_TE(particles);
+
+                        high_prec TE_error_ij_corrected = (TE_post_ij_corrected - TE_pre_ij) / TE_pre_ij;
+
+                        if (abs(TE_error_ij_corrected) > error_threshold) {
+                            cout << "TE error after energy correction: " << TE_error_ij_corrected << endl;
+                        }
+
+                    } else {
+                        cout << "Could not apply energy correction!" << endl;
+                        cout << "TE error before energy correction: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij << endl;
+                    }
+                }
+
+
+>>>>>>> 1c9555868a5bb893f0b409901a228c4c1d973fd9
             }
         }
     }
