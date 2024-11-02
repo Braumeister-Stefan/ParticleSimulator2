@@ -7,6 +7,7 @@
 //Standard libraries
 #include <memory>
 #include <iostream>
+#include <random>
 
 //Internal libraries
 #include "Model/Model.h"
@@ -18,7 +19,10 @@ using namespace std;
 
 int main() {
 
-    
+    //0. Set seed for random number generation
+    srand(42);
+    //print a random number
+    cout << "Random number: " << rand() << endl;
 
     //1. initialize the model
     ParticleModel model;

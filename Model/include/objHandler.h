@@ -34,7 +34,7 @@ public:
 
     //Declare the remove overlap functions
     void remove_overlaps(shared_ptr<Particles> particles);
-    int remove_overlap(shared_ptr<Particle>& particle1, shared_ptr<Particle>& particle2);
+    bool remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
 
     //cache functions
     shared_ptr<Particles> obj_from_cache(string obj_name);

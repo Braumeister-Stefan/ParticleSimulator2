@@ -73,7 +73,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
         new_object->b = safe_stod(col4);   
         new_object->x = safe_stod(col5);  
         new_object->y = safe_stod(col6);   
-        new_object->z = safe_stod(col7);   
+        new_object->z = 0;  
         new_object->vx = safe_stod(col8);  
         new_object->vy = safe_stod(col9);  
         new_object->vz = safe_stod(col10);
@@ -228,7 +228,7 @@ unique_ptr<Particle> ObjHandler::flatten_simple_obj(int particles_loaded, shared
             particle->b = simple_object->b;
             particle->x = simple_object->x;
             particle->y = simple_object->y;
-            particle->z = simple_object->z;
+            particle->z = 0;
             particle->vx = simple_object->vx;
             particle->vy = simple_object->vy;
             particle->vz = simple_object->vz;
@@ -304,6 +304,9 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
         Vector2D sample_point = sample_in_circle(center, circle_rad);
 
+        //print the sampled point
+        cout << "Sampled point: x=" << sample_point.x << ", y=" << sample_point.y << endl;
+
 
         particle->particle_id = i;
         particle->r = complex_object->r;
@@ -311,7 +314,7 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
         particle->b = complex_object->b;
         particle->x = sample_point.x.convert_to<double>();
         particle->y = sample_point.y.convert_to<double>();
-        //particle->z = complex_object->z;
+        particle->z = 0;
         particle->vx = complex_object->vx;
         particle->vy = complex_object->vy;
         particle->vz = complex_object->vz;
@@ -388,7 +391,7 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
             new_particle->b = safe_stod(col4);   
             new_particle->x = safe_stod(col5);  
             new_particle->y = safe_stod(col6);   
-            new_particle->z = safe_stod(col7);   
+            new_particle->z = 0;   
             new_particle->vx = safe_stod(col8);  
             new_particle->vy = safe_stod(col9);  
             new_particle->vz = safe_stod(col10);
@@ -466,64 +469,68 @@ void ObjHandler::obj_to_cache(shared_ptr<object> complex_object, shared_ptr<Part
 
 
 void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
-    //This function will remove all overlapping particles in a particles struct
+    // Sort particles by particle_id to ensure a consistent processing order
+    sort(particles->particle_list.begin(), particles->particle_list.end(),
+        [](shared_ptr<Particle> a, shared_ptr<Particle> b) {
+            return a->particle_id < b->particle_id;
+        });
 
-    //loop through the particles struct and check for overlapping particles. If particles overlap, remove the particle with the smaller mass
-
+    vector<shared_ptr<Particle>> non_overlapping_particles;
     int removed_overlaps = 0;
-    for (int i = 0; i < particles->particle_list.size(); i++) {
 
-        for (int j = i + 1; j < particles->particle_list.size(); j++) {
-            //remove the particle with the smaller mass
-            removed_overlaps += remove_overlap(particles->particle_list[i], particles->particle_list[j]);
+    // Iterate over each particle
+    for (int i = 0; i < particles->particle_list.size(); ++i) {
+        bool overlap_found = false;
 
+        // Compare the current particle with all remaining particles
+        for (int j = i + 1; j < particles->particle_list.size(); ++j) {
+            if (remove_overlap(particles->particle_list[i], particles->particle_list[j])) {
+                overlap_found = true;
+                ++removed_overlaps;
+                break; // Stop further checks for this particle since it's overlapped
+            }
+        }
+
+        // If no overlap was found, keep the particle
+        if (!overlap_found) {
+            non_overlapping_particles.push_back(particles->particle_list[i]);
         }
     }
 
-
-    //remove the null particles from the particles struct
-    particles->particle_list.erase(remove_if(particles->particle_list.begin(), particles->particle_list.end(), [](shared_ptr<Particle> particle) { return particle == nullptr; }), particles->particle_list.end());
+    // Replace the original particle list with the non-overlapping particles
+    particles->particle_list = std::move(non_overlapping_particles);
 
     cout << "Removed " << removed_overlaps << " overlapping particles." << endl;
-           
 }
 
-int ObjHandler::remove_overlap(shared_ptr<Particle>& particle1, shared_ptr<Particle>& particle2) {
-    //This function will remove the particle with the smaller mass if two particles overlap
+bool ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
+    // Calculate the distance between the two particles
+    double distance = sqrt(pow(particle1->x - particle2->x, 2) +
+                           pow(particle1->y - particle2->y, 2) +
+                           pow(particle1->z - particle2->z, 2));
 
-    //check if either of the particles is null
-    if (particle1 == nullptr || particle2 == nullptr) {
-        return 0;
-    }
-
-    //1. calculate the distance between the particles
-    double distance = sqrt(pow(particle1->x - particle2->x, 2) + pow(particle1->y - particle2->y, 2) + pow(particle1->z - particle2->z, 2));
-
-    //2. check if the distance is smaller than the sum of the radii of the particles
+    // If particles overlap, determine which to keep based on mass
     if (distance < particle1->rad + particle2->rad) {
-        //3. remove the particle with the smaller mass
         if (particle1->m < particle2->m) {
-
-            //make particle1 null
-            particle1.reset();
+            cout << "Particle " << particle1->particle_id << " removed." << endl;
         } else {
-            //make particle2 null
-            particle2.reset();
-            
+            cout << "Particle " << particle2->particle_id << " removed." << endl;
         }
-
-        return 1;
+        return true; // Indicate an overlap was found
     }
-
-    return 0;
+    return false; // No overlap found
 }
 
 double ObjHandler::safe_stod(string str) {
     // Function to safely convert string to double, defaulting to 0.0 if empty or non-convertible
     if (str.empty()) {
         return 0.0; // Return 0.0 if string is empty
+    } 
+    //else, if stod(str) < e-10, return 0.0
+    else if (stod(str) < 1e-10) {
+        return 0.0;
     }
 
-    return std::stod(str); // Convert string to double
+    return stod(str); // Convert string to double
     
 }

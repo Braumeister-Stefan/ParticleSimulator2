@@ -5,7 +5,13 @@
 #include <vector>
 #include <memory>
 
+#include <boost/multiprecision/cpp_dec_float.hpp>
+
+
+
 using namespace std;
+using namespace boost::multiprecision;
+using high_prec = cpp_dec_float_50;
 
 struct Particle {
     int particle_id;
@@ -22,9 +28,11 @@ struct Particle {
     double m; //mass
     double rad; //radius of sphere
     double rest; //restitution parameter of sphere
+    double temp; //temperature of the particle
 
 
 };
+
 
 struct Particles {
     vector<shared_ptr<Particle>> particle_list;

@@ -8,8 +8,16 @@
 //Internal libraries
 #include "InitStructs.h"
 
+//external libraries
+#include <boost/multiprecision/cpp_dec_float.hpp>
+
+
 
 using namespace std;
+using namespace boost::multiprecision;
+
+using high_prec = cpp_dec_float_50;
+
 
 class Engine {
 public:
@@ -24,6 +32,36 @@ public:
     // Destructor
     ~Engine();
 
+    //structs
+
+    //structure with momentum x,y vector
+
+    struct momentum {
+        double x;
+        double y;
+
+        // Define arithmetic operators
+        momentum operator+(const momentum& other) const {
+            return { x + other.x, y + other.y };
+        }
+
+        momentum operator-(const momentum& other) const {
+            return { x - other.x, y - other.y };
+        }
+
+        momentum operator*(const double& scalar) const {
+            return { x * scalar, y * scalar };
+        }
+
+        momentum operator/(const double& scalar) const {
+            return { x / scalar, y / scalar };
+        }
+
+        momentum operator/(const momentum& other) const {
+            return { x / other.x, y / other.y };
+        }
+    };
+
     //Function to run the simulation and return snapshots of each time step
     shared_ptr<snapshots> run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles);
 
@@ -33,6 +71,7 @@ public:
     //Functions to resolve overlap between particles
     bool resolve_overlap(shared_ptr<Particles> particles);
     void resolve_overlap_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    //void correct_energies(shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j, high_prec delta_E, high_prec nx, high_prec ny, high_prec e);
     
 
     
@@ -61,9 +100,10 @@ public:
     //Function to validate TE
     double calc_TE(shared_ptr<Particles> particles);
     double calc_TE_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    
 
-    double calc_mom(shared_ptr<Particles> particles);
-    double calc_mom_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    momentum calc_mom(shared_ptr<Particles> particles); 
+    momentum calc_mom_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
     
 };
 
