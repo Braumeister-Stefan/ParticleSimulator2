@@ -146,12 +146,13 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
     fprintf(gnuplotPipe, "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n", metrics_t->fps);
     fprintf(gnuplotPipe, "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n", metrics_t->KE/1000);
     fprintf(gnuplotPipe, "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n", metrics_t->PE/1000);
-    fprintf(gnuplotPipe, "set label 6 'TE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n", metrics_t->TE/1000);
-    fprintf(gnuplotPipe, "set label 7 'Mom x= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n", metrics_t->mom_x/1000);
-    fprintf(gnuplotPipe, "set label 8 'Mom y= %f K' at screen 0.01,0.60 textcolor rgb 'white'\n", metrics_t->mom_y/1000);
+    fprintf(gnuplotPipe, "set label 6 'HE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n", metrics_t->HE/1000);
+    fprintf(gnuplotPipe, "set label 7 'TE= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n", metrics_t->TE/1000);
+    fprintf(gnuplotPipe, "set label 8 'Mom x= %f K' at screen 0.01,0.60 textcolor rgb 'white'\n", metrics_t->mom_x/1000);
+    fprintf(gnuplotPipe, "set label 9 'Mom y= %f K' at screen 0.01,0.55 textcolor rgb 'white'\n", metrics_t->mom_y/1000);
     //fprintf(gnuplotPipe, "set label 8 'Mom Change x= %f' at screen 0.01,0.60 textcolor rgb 'white'\n", metrics_t->mom_x_change);
     //fprintf(gnuplotPipe, "set label 9 'Mom Change y= %f' at screen 0.01,0.55 textcolor rgb 'white'\n", metrics_t->mom_y_change);
-    fprintf(gnuplotPipe, "set label 9 'Relative TE Error= %f' at screen 0.01,0.55 textcolor rgb 'white'\n", metrics_t->relative_error);
+    fprintf(gnuplotPipe, "set label 10 'Relative TE Error= %f' at screen 0.01,0.50 textcolor rgb 'white'\n", metrics_t->relative_error);
 
 
     //format by dividing by /1000 and calling it K

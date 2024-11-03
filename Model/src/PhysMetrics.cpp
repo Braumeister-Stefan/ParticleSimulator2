@@ -39,21 +39,26 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         double potential_energy = 0.0;
         double momentum_x = 0.0;
         double momentum_y = 0.0;
+        double heating_energy = 0.0;
+
 
         // Get the particles for the current snapshot
         shared_ptr<Particles> particles = particle_states->snaps[i];
         int particle_count = particles->particle_list.size();
 
-        // Calculate kinetic energy and momentum for the snapshot
+        // Calculate kinetic energy,momentum and temperature for the snapshot
         for (int j = 0; j < particle_count; j++) {
             double mass = particles->particle_list[j]->m;
             double vx = particles->particle_list[j]->vx;
             double vy = particles->particle_list[j]->vy;
             double vz = particles->particle_list[j]->vz;
+            double temp = particles->particle_list[j]->temp;
 
             kinetic_energy += 0.5 * mass * (vx * vx + vy * vy + vz * vz);
             momentum_x += mass * vx;
             momentum_y += mass * vy;
+            heating_energy += temp;
+
         }
 
         // Calculate potential energy for each unique pair of particles
@@ -71,9 +76,10 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         shared_ptr<test_metrics_t> metrics = particle_states->metrics[i];
         metrics->KE = kinetic_energy;
         metrics->PE = potential_energy;
-        metrics->TE = kinetic_energy + potential_energy;
+        metrics->TE = kinetic_energy + potential_energy + heating_energy;
         metrics->mom_x = momentum_x;
         metrics->mom_y = momentum_y;
+        metrics->HE = heating_energy;
 
         // Calculate relative changes from the initial snapshot
         if (i == 0) {

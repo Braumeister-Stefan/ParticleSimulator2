@@ -45,6 +45,7 @@ struct object {
     double m; //mass
     double rad; //radius of sphere
     double rest; //restitution parameter of sphere
+    double temp; //temperature of the particle
     string complexity = "simple"; //if the object is complex, what is its shape, e.g simple, circle, square, etc.
     double complexity_size; //if the object is complex, what is its radius. empty for simple objects
     double complexity_n; //how many particles make up the complex object
@@ -70,6 +71,7 @@ struct test_metrics_t {
     double mom_y;
     double mom_x_change;
     double mom_y_change;
+    double HE;
 
     double TE_change;
     double TE_error;

@@ -29,8 +29,7 @@ Vector2D sample_in_circle(Vector2D center, double radius) {
     double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
     double r = radius * sqrt(rand() / (double)RAND_MAX);
 
-    //print random number
-    cout << "Random number in sample_in_circle(): " << rand() << endl;
+    
 
     //initialize the point struct
 

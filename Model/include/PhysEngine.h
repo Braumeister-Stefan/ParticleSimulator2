@@ -71,7 +71,13 @@ public:
     //Functions to resolve overlap between particles
     bool resolve_overlap(shared_ptr<Particles> particles);
     void resolve_overlap_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
-    //void correct_energies(shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j, high_prec delta_E, high_prec nx, high_prec ny, high_prec e);
+    
+
+    //heating functions 
+    high_prec heat_ij(high_prec E, shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j);
+
+    //functions to resolve energy gap after inelastic collission (currently also used as stop gap for energy conservation in resolve_ovverlap_ij)
+    void resolve_energy_gap(shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j, high_prec delta_E);
     
 
     

@@ -28,7 +28,7 @@ struct Particle {
     double m; //mass
     double rad; //radius of sphere
     double rest; //restitution parameter of sphere
-    double temp; //temperature of the particle
+    double temp=0; //temperature of the particle
 
 
 };

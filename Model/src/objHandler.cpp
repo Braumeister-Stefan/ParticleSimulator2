@@ -44,22 +44,22 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    const int column_count = 16;
+    const int column_count = 17;
 
     io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(object_input_path);
 
     //3. Read the contents of the csv file and store each row in a object object. Store all object objects in a vector.
     objects object_list;
 
-    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16;
+    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17;
 
     int objects_loaded = 1;
 
     //discard the header row. This list is a guide to the columns in the csv file.
-    in.read_header(io::ignore_extra_column, "OBJECT_NAME", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
+    in.read_header(io::ignore_extra_column, "OBJECT_NAME", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "TEMP","COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
 
 
-    while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16)) {
+    while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17)) {
     
 
         unique_ptr<object> new_object(new object);
@@ -76,19 +76,26 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
         new_object->z = 0;  
         new_object->vx = safe_stod(col8);  
         new_object->vy = safe_stod(col9);  
+
+        cout << "vx: " << col8 << endl;
+        cout << "vy: " << col9 << endl;
+
+
+
         new_object->vz = safe_stod(col10);
         new_object->m = safe_stod(col11);  
         new_object->rad = safe_stod(col12); 
         new_object->rest = safe_stod(col13);
+        new_object->temp = safe_stod(col14);
 
-        if (col14.empty()) {
+        if (col15.empty()) {
             new_object->complexity = "simple";
         } else {
-            new_object->complexity = col14;
+            new_object->complexity = col15;
         }
 
-        new_object->complexity_size = safe_stod(col15);
-        new_object->complexity_n = stoi(col16);
+        new_object->complexity_size = safe_stod(col16);
+        new_object->complexity_n = stoi(col17);
 
         
         //add the new scenario to the list of scenarios
@@ -140,6 +147,9 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     //9. Return the particles struct
     
+    //print the xv and yv of the first particle
+    //cout << "vx: " << particles->particle_list[0]->vx << endl;
+    //cout << "vy: " << particles->particle_list[0]->vy << endl;
 
     return particles;
 
@@ -235,6 +245,7 @@ unique_ptr<Particle> ObjHandler::flatten_simple_obj(int particles_loaded, shared
             particle->m = simple_object->m;
             particle->rad = simple_object->rad;
             particle->rest = simple_object->rest;
+            particle->temp = simple_object->temp;
 
             return particle;
 
@@ -304,8 +315,7 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
         Vector2D sample_point = sample_in_circle(center, circle_rad);
 
-        //print the sampled point
-        cout << "Sampled point: x=" << sample_point.x << ", y=" << sample_point.y << endl;
+        
 
 
         particle->particle_id = i;
@@ -317,9 +327,15 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
         particle->z = 0;
         particle->vx = complex_object->vx;
         particle->vy = complex_object->vy;
+
+        //print vx and vy
+        //cout << "vx: " << particle->vx << " vy: " << particle->vy << endl;
+
+
         particle->vz = complex_object->vz;
         particle->rad = complex_object->rad;
         particle->rest = complex_object->rest;
+        particle->temp = complex_object->temp;
 
 
         particles->particle_list.push_back(move(particle));
@@ -367,19 +383,19 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
         typedef io::trim_chars<' ', '\t'> TrimPolicy;
         typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-        const int column_count = 16;
+        const int column_count = 17;
 
         io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(cache_path);
 
         //3. Read the contents of the csv file and store each row in a particle object. Store all particle objects in a vector.
-        string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16;
+        string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17;
 
         int particles_loaded = 1;
 
         //discard the header row. This list is a guide to the columns in the csv file.
-        in.read_header(io::ignore_extra_column, "PARTICLE_ID", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
+        in.read_header(io::ignore_extra_column, "PARTICLE_ID", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "TEMP","COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
 
-        while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16)) {
+        while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17)) {
     
 
             unique_ptr<Particle> new_particle(new Particle);
@@ -398,6 +414,7 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
             new_particle->m = safe_stod(col11);  
             new_particle->rad = safe_stod(col12); 
             new_particle->rest = safe_stod(col13);
+            new_particle->temp = safe_stod(col14);
 
 
             //add the new particle to the list of particles
@@ -435,7 +452,7 @@ void ObjHandler::obj_to_cache(shared_ptr<object> complex_object, shared_ptr<Part
     }
 
     // 3. Write the header row
-    cache_file << "PARTICLE_ID,R,G,B,X,Y,Z,VX,VY,VZ,M,RAD,REST, COMPLEXITY, COMPLEXITY_SIZE, COMPLEXITY_N\n";
+    cache_file << "PARTICLE_ID,R,G,B,X,Y,Z,VX,VY,VZ,M,RAD,REST,TEMP,COMPLEXITY,COMPLEXITY_SIZE,COMPLEXITY_N\n";
 
     // 4. Write the particles to the cache file
 
@@ -512,9 +529,9 @@ bool ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Parti
     // If particles overlap, determine which to keep based on mass
     if (distance < particle1->rad + particle2->rad) {
         if (particle1->m < particle2->m) {
-            cout << "Particle " << particle1->particle_id << " removed." << endl;
+            //cout << "Particle " << particle1->particle_id << " removed." << endl;
         } else {
-            cout << "Particle " << particle2->particle_id << " removed." << endl;
+            //cout << "Particle " << particle2->particle_id << " removed." << endl;
         }
         return true; // Indicate an overlap was found
     }
