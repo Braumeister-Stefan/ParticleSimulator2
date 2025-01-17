@@ -72,13 +72,14 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
         new_object->g = safe_stod(col3);   
         new_object->b = safe_stod(col4);   
         new_object->x = safe_stod(col5);  
+        //cout << "x: " << new_object->x << endl; 
         new_object->y = safe_stod(col6);   
         new_object->z = 0;  
         new_object->vx = safe_stod(col8);  
         new_object->vy = safe_stod(col9);  
 
-        cout << "vx: " << col8 << endl;
-        cout << "vy: " << col9 << endl;
+        //cout << "vx: " << col8 << endl;
+        //cout << "vy: " << col9 << endl;
 
 
 
@@ -543,8 +544,8 @@ double ObjHandler::safe_stod(string str) {
     if (str.empty()) {
         return 0.0; // Return 0.0 if string is empty
     } 
-    //else, if stod(str) < e-10, return 0.0
-    else if (stod(str) < 1e-10) {
+    //else, if abs(stod(str)) < e-10, return 0.0
+    else if (abs(stod(str)) < 1e-10) {
         return 0.0;
     }
 

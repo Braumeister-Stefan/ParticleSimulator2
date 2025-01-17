@@ -19,7 +19,7 @@
 				"${workspaceFolder}/Model/src/ObjHandler.cpp",
 				"${workspaceFolder}/Model/src/MathUtils.cpp",
 				"-o", 
-				"${workspaceFolder}/ParticleSimulator2.exe"
+				"${workspaceFolder}/ParticleSimulator2_b.exe"
 			],
 			"options": {
 				"cwd": "${fileDirname}"
