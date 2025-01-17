@@ -87,7 +87,7 @@ public:
 
 
     void resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
-    bool check_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    bool check_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2, double threshold);
 
 
 

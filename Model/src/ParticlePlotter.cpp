@@ -31,13 +31,24 @@ Plotter::~Plotter() {
 // Define the plot_run method
 void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states) { 
     
-    //1. convert r,g,b to hex
+    //1. brighten the rgb values for particles with higher temperature
+    particle_states = heat_to_rgb(particle_states);
+
+    //2. convert r,g,b to hex
     for (int i = 0; i < particle_states->snaps.size(); i++) {
+
+        
+        
+
         particle_states->snaps[i] = convert_intensity_to_rgb(particle_states->snaps[i]);
     }
+
+    
+
+
     cout << "RGB values have been calculated." << endl;
 
-    //2. Initialize the plot using GNUplot
+    //3. Initialize the plot using GNUplot
 
     init_GNU(scenario);
 
@@ -211,4 +222,57 @@ shared_ptr<Particles> Plotter::convert_intensity_to_rgb(shared_ptr<Particles> pa
     }
 
     return particles;
+}
+
+
+shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots) 
+{
+    // 1. Find the highest temperature of all particles in all snapshots.
+    double max_temp = 0.0;
+    for (int i = 0; i < snapshots->snaps.size(); i++) {
+        for (int j = 0; j < snapshots->snaps[i]->particle_list.size(); j++) {
+            double t = snapshots->snaps[i]->particle_list[j]->temp;
+            if (t > max_temp) {
+                max_temp = t;
+            }
+        }
+    }
+
+    double min_temp = 0.0;
+    double temp_range = max_temp - min_temp;
+
+    // If max_temp == 0 (or < 0), there's no brightness increase to do.
+    if (temp_range <= 0.0) {
+        return snapshots;
+    }
+
+    // 2. For each snapshot & each particle, linearly bring (r,g,b) closer to 1
+    //    according to (temp - min_temp) / temp_range, clamping them at 1.0.
+    for (int i = 0; i < snapshots->snaps.size(); i++) {
+        for (int j = 0; j < snapshots->snaps[i]->particle_list.size(); j++) {
+
+            double t = snapshots->snaps[i]->particle_list[j]->temp;
+            double fraction = (t - min_temp) / temp_range;
+            // Clamp the fraction between 0 and 1
+            if (fraction < 0.0) fraction = 0.0;
+            if (fraction > 1.0) fraction = 1.0;
+
+            // Current color
+            double &r = snapshots->snaps[i]->particle_list[j]->r;
+            double &g = snapshots->snaps[i]->particle_list[j]->g;
+            double &b = snapshots->snaps[i]->particle_list[j]->b;
+
+            // Move each channel from its current value toward 1 by 'fraction'
+            r = r + (1.0 - r) * fraction;
+            g = g + (1.0 - g) * fraction;
+            //b = b + (1.0 - b) * fraction;
+
+            // Ensure each channel does not exceed 1.0
+            if (r > 1.0) r = 1.0;
+            if (g > 1.0) g = 1.0;
+            if (b > 1.0) b = 1.0;
+        }
+    }
+
+    return snapshots;
 }
