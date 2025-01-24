@@ -99,7 +99,7 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         // Cumulative TE error over time
         if (i > 0) {
             double prev_TE_error = particle_states->metrics[i - 1]->TE_error;
-            double te_error = abs(metrics->TE - particle_states->metrics[i - 1]->TE);
+            double te_error = metrics->TE - particle_states->metrics[i - 1]->TE;
             metrics->TE_error = prev_TE_error + te_error;
             metrics->relative_error = metrics->TE_error / particle_states->metrics[0]->TE;
         } else {

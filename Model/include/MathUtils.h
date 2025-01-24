@@ -77,4 +77,6 @@ high_prec calc_magnitude(Vector2D vector);
 Vector2D find_intersection(Line line1, Circle circle, Vector2D pos);
 Vector2D sample_in_circle(Vector2D center, double radius);
 
+high_prec compute_velocity_threshold(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2, double dt);
+
 

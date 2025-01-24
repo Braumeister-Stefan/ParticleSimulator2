@@ -34,6 +34,22 @@ using momentum = Engine::momentum;
 //Gravitational constant
 const double G = 6.674 * pow(10, -11); //m^3 kg^-1 s^-2
 
+//variables storing total error of overlap, collision and verlet
+high_prec total_TE_error_overlap = 0;
+high_prec total_TE_error_collision = 0;
+high_prec total_TE_error_verlet = 0;
+
+//variable storing counter of energy gap corrections
+int energy_gap_corrections = 0;
+int energy_gap_corrections_incomplete = 0;
+
+//variables storing the index of overlap, overlap_ij
+int overlap_iter = 0;
+int overlap_ij_iter = 0;
+int update_iter = 0;
+
+
+
 //define static member variables
 double Engine::dt = 1; //time step
 
@@ -104,6 +120,7 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
         double te_pre_update = calc_TE(particles);
         momentum mom_pre_update = calc_mom(particles);
+        update_iter = i;
         update_particles(particles);
         double te_post_update = calc_TE(particles);
         momentum mom_post_update = calc_mom(particles);
@@ -145,6 +162,16 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     cout << scenario->name << " simulation completed." << endl << endl;
 
+    cout << "Total TE error (sum of parts): " << total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet << endl;
+
+    cout << "% overlap error: " << total_TE_error_overlap / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet) * 100 << endl;
+    cout << "% collision error: " << total_TE_error_collision / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet) * 100 << endl;
+    cout << "% verlet error: " << total_TE_error_verlet / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet) * 100 << endl;
+
+    cout << "Total energy gap corrections: " << energy_gap_corrections << endl;
+    cout << "Total energy gap corrections incomplete: " << energy_gap_corrections_incomplete << endl;
+    //cout << "Total energy gap corrections incomplete in %: " << (energy_gap_corrections_incomplete / energy_gap_corrections) * 100 << endl;
+
     //6. save down snapshots to the csv 
 
     run_to_cache(scenario, particle_states);
@@ -173,16 +200,18 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
     bool no_overlap = false;
 
     double te_pre_overlap = calc_TE(particles);
-    momentum mom_pre_overlap = calc_mom(particles);
+    //momentum mom_pre_overlap = calc_mom(particles);
 
     for (int i = 0; i < 8; i++) {
+        //print i
+        //cout << "Overlap resolution iteration: " << i << endl;
 
         //cout << "Starting overlap iteration: " << i << endl;
 
         //cout << "no_overlap in update_particles(): " << no_overlap << endl;
 
         double te_pre_overlap_iter = calc_TE(particles);
-        momentum mom_pre_overlap_iter = calc_mom(particles);
+        //momentum mom_pre_overlap_iter = calc_mom(particles);
 
         if (no_overlap) {
             //cout << "no_overlap is true, breaking loop" << endl;
@@ -192,6 +221,8 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
             no_overlap = true;
 
             //cout << "no_overlap is false, resolving overlap" << endl;
+            overlap_iter = i;
+
             no_overlap = resolve_overlap(particles);
         }
 
@@ -227,10 +258,10 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
 
 
     double te_post_overlap = calc_TE(particles);
-    momentum mom_post_overlap = calc_mom(particles);
+    //momentum mom_post_overlap = calc_mom(particles);
 
     double te_error_overlap = (te_post_overlap - te_pre_overlap) / te_pre_overlap;
-    momentum mom_error_overlap = (mom_post_overlap - mom_pre_overlap) / mom_pre_overlap;
+    //momentum mom_error_overlap = (mom_post_overlap - mom_pre_overlap) / mom_pre_overlap;
 
     //if (te_error_overlap > error_threshold) {
     //    cout << "TE error overlap - update func: " << te_error_overlap << endl;
@@ -244,12 +275,12 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
 
     //cout << "Resolving collissions..." << endl;
     double te_pre_collission = calc_TE(particles);
-    momentum mom_pre_collission = calc_mom(particles);
+    //momentum mom_pre_collission = calc_mom(particles);
 
 
     resolve_collisions(particles);
     double te_post_collission = calc_TE(particles);
-    momentum mom_post_collission = calc_mom(particles);
+    //momentum mom_post_collission = calc_mom(particles);
 
     double te_error_collission = (te_post_collission - te_pre_collission) / te_pre_collission;
 
@@ -257,7 +288,7 @@ void Engine::update_particles(shared_ptr<Particles> particles) {
         cout << "TE error collission: " << te_error_collission << endl;
     }
 
-    momentum mom_diff_collission = mom_post_collission - mom_pre_collission;
+    //momentum mom_diff_collission = mom_post_collission - mom_pre_collission;
 
     //if (abs(mom_diff_collission.x) > 0.0001) {
         //cout << "Momentum difference in collission: " << mom_diff_collission.x << endl;
@@ -293,7 +324,7 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
     //cout << "Resolving overlap between particles triggered" << endl;
     bool no_overlap = true;
     high_prec tTE_pre = calc_TE(particles);  // Accumulates total energy error for all particle pairs
-    momentum pre_mom = calc_mom(particles);  // Accumulates total momentum error for all particle pairs
+    //momentum pre_mom = calc_mom(particles);  // Accumulates total momentum error for all particle pairs
 
     high_prec error_threshold = 0.001;  // Energy and momentum error threshold
 
@@ -309,7 +340,25 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
                 pair_count++;
 
                 // Call the core function to resolve overlap between particles i and j
+
+                double TE_pre_overlap = calc_TE(particles);
+                
                 resolve_overlap_ij(particles->particle_list[i], particles->particle_list[j]);
+
+                double TE_post_overlap = calc_TE(particles);
+                double TE_error_overlap = (TE_post_overlap - TE_pre_overlap) / TE_pre_overlap;
+
+                //cout << "------------------------------------------" << endl;
+                //cout << "For particle pair: " << particles->particle_list[i]->particle_id << " and " << particles->particle_list[j]->particle_id << endl;
+                //cout << "TE error overlap: " << TE_post_overlap - TE_pre_overlap << endl;
+                //cout << "TE error overlap: " << TE_error_overlap*100 << "%" << endl;
+                //cout << "------------------------------------------" << endl;
+
+                //pause if particle_id is anything but 1 and 2
+                if (particles->particle_list[i]->particle_id != 1 && particles->particle_list[i]->particle_id != 2) {
+                    //cout << "Pausing for particle " << particles->particle_list[i]->particle_id << endl;
+                    //cin.get();
+                }
 
                 //check if the particles are still overlapping
                 if (check_collission(particles->particle_list[i], particles->particle_list[j], 0.0001)) {
@@ -327,21 +376,15 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
 
     // Calculate the final total energy error and print it
     high_prec tTE_post = calc_TE(particles);
-    momentum tmom_post = calc_mom(particles);
+    //momentum tmom_post = calc_mom(particles);
 
     high_prec tTE_error = (tTE_post - tTE_pre) / tTE_pre;
-    momentum tmom_error = (tmom_post - pre_mom) / pre_mom;
+    //momentum tmom_error = (tmom_post - pre_mom) / pre_mom;
 
-    if (abs(tTE_error) > error_threshold) {
-        //cout << "Total TE error after overlap resolution - in resolve_overlap(): " << tTE_error << endl;
-    }
+    
+    //cout << "Total TE error after overlap resolution - in resolve_overlap(): " << tTE_error*100 << "%" << endl;
 
-    //check if momentum is conserved, taking into account that there is an x and y component
-    if (abs(tmom_error.x) > error_threshold || abs(tmom_error.y) > error_threshold) {
-        //cout << "Momentum error after overlap resolution - in resolve_overlap(): " << tmom_error.x << " " << tmom_error.y << endl;
-    }
-
-    //cout << "returning no_overlap: " << no_overlap << endl;
+    
 
     return no_overlap;
 }
@@ -349,6 +392,11 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
 void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j) 
 {
     //cout << "Resolving overlap between particles_ij triggered" << endl;
+
+    //increment the overlap_ij_iter
+    overlap_ij_iter++;
+
+    
 
     // Define thresholds
     high_prec error_threshold = 0.0001;
@@ -363,24 +411,16 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec vx2_before = particle_j->vx;
     high_prec vy2_before = particle_j->vy;
 
-    // Print pre-collision data
-    // cout << "Pre-collission positions and velocities:" << endl;
-    // cout << "Particle 1: " << particle_i->particle_id 
-    //      << ", x: " << particle_i->x 
-    //      << ", y: " << particle_i->y 
-    //      << ", vx: " << particle_i->vx 
-    //      << ", vy: " << particle_i->vy << endl;
-    // cout << "Particle 2: " << particle_j->particle_id 
-    //      << ", x: " << particle_j->x 
-    //      << ", y: " << particle_j->y 
-    //      << ", vx: " << particle_j->vx 
-    //      << ", vy: " << particle_j->vy << endl;
+    //store distance, overlap, and relative velocity pre-collision
+    high_prec distance_pre = hypot(x2_before - x1_before, y2_before - y1_before);
+    high_prec overlap_pre = (particle_i->rad + particle_j->rad) - distance_pre;
+    high_prec rel_vel_pre = (vx2_before - vx1_before) * (x2_before - x1_before) + (vy2_before - vy1_before) * (y2_before - y1_before);
+
 
     high_prec TE_pre_ij = calc_TE_ij(particle_i, particle_j);
     momentum mom_pre_ij = calc_mom_ij(particle_i, particle_j);
 
-    // cout << "TE pre: " << TE_pre_ij << endl;
-    // cout << "Momentum pre: " << mom_pre_ij.x << " " << mom_pre_ij.y << endl;
+
 
     // Compute overlap
     high_prec dx = x2_before - x1_before;
@@ -414,10 +454,6 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     particle_j->x = (x2_before + nx * d2).convert_to<double>();
     particle_j->y = (y2_before + ny * d2).convert_to<double>();
 
-    // --------------------------------------------------------------------
-    // Remove the "perfectly elastic impulse" block, because we rely on
-    // resolve_energy_gap(...) to do the final energy/momentum correction.
-    // --------------------------------------------------------------------
 
     // Re-check distances
     high_prec dx_new = particle_j->x - particle_i->x;
@@ -432,7 +468,23 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec TE_post_ij = calc_TE_ij(particle_i, particle_j);
     momentum mom_post_ij = calc_mom_ij(particle_i, particle_j);
 
-    // If energy changed, fix it with resolve_energy_gap(...)
+    //Store post-collision data, positions and velocities
+    high_prec distance_post = hypot(dx_new, dy_new);
+
+    high_prec rel_vel_post = (particle_j->vx - particle_i->vx) * dx_new + (particle_j->vy - particle_i->vy) * dy_new;
+    
+    high_prec x1_post = particle_i->x;
+    high_prec y1_post = particle_i->y;
+    high_prec x2_post = particle_j->x;
+    high_prec y2_post = particle_j->y;
+    high_prec vx1_post = particle_i->vx;
+    high_prec vy1_post = particle_i->vy;
+    high_prec vx2_post = particle_j->vx;
+    high_prec vy2_post = particle_j->vy;
+
+
+
+
 
     
     if (TE_post_ij != TE_pre_ij) {
@@ -447,206 +499,160 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
 
     //After correction, check again
     high_prec TE_post_ij_corrected = calc_TE_ij(particle_i, particle_j);
+    high_prec distance_post_corrected = hypot(dx_new, dy_new);
+    high_prec overlap_post_corrected = (particle_i->rad + particle_j->rad) - distance_post_corrected;
 
-    // Print post-collision data
-    // cout << "Post-collission positions and velocities:" << endl;
-    // cout << "Particle 1: " << particle_i->particle_id 
-    //      << ", x: " << particle_i->x 
-    //      << ", y: " << particle_i->y 
-    //      << ", vx: " << particle_i->vx 
-    //      << ", vy: " << particle_i->vy << endl;
-    // cout << "Particle 2: " << particle_j->particle_id 
-    //      << ", x: " << particle_j->x 
-    //      << ", y: " << particle_j->y 
-    //      << ", vx: " << particle_j->vx 
-    //      << ", vy: " << particle_j->vy << endl;
-
-    // //cout << "TE post: " << TE_post_ij << endl;
+    high_prec rel_vel_post_corrected = (particle_j->vx - particle_i->vx) * dx_new + (particle_j->vy - particle_i->vy) * dy_new;
     
-    // cout << "TE post corrected: " << TE_post_ij_corrected << endl;
+
+
+    high_prec min_restitution = min(particle_i->rest, particle_j->rest);
+
+
+
+    //Print all informations as above in a clear format
+    // cout << "------------------------------------------" << endl;
+    // cout << "Update iteration: " << update_iter << endl;
+    // cout << "Overlap iteration: " << overlap_iter << endl;
+
+    
+
+
+    // cout << "------------------------------------------" << endl;
+    // cout << "Particle minimum restitution: " << min_restitution << endl;
+    // cout << "------------------------------------------" << endl;
+
+
+    // cout << "Particle " << particle_i->particle_id << ": x=" << x1_before << ", y=" << y1_before << ", vx=" << vx1_before << ", vy=" << vy1_before << endl;
+    // cout << "Particle " << particle_j->particle_id << ": x=" << x2_before << ", y=" << y2_before << ", vx=" << vx2_before << ", vy=" << vy2_before << endl;
+    // cout << "------------------------------------------" << endl;
+
+    
+    // cout << "TE pre: " << TE_pre_ij <<  endl;
+    // cout << "------------------------------------------" << endl;
+
+    // cout << "distance_pre: " << distance_pre << endl;
+    // cout << "overlap_pre: " << overlap_pre << endl;
+    // cout << "rel_vel_pre: " << rel_vel_pre << endl;
+    // cout << "------------------------------------------" << endl;
+
+    // cout << "------------------------------------------" << endl;
+    // cout << "TE post: " << TE_post_ij << endl << "Error: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
+    // cout << "------------------------------------------" << endl;
+
+    // cout << "Particle " << particle_i->particle_id << ": x=" << x1_post << ", y=" << y1_post << ", vx=" << vx1_post << ", vy=" << vy1_post << endl;
+    // cout << "Particle " << particle_j->particle_id << ": x=" << x2_post << ", y=" << y2_post << ", vx=" << vx2_post << ", vy=" << vy2_post << endl;
+    // cout << "------------------------------------------" << endl;
+
+    // cout << "distance_post: " << distance_post << endl;
+    // cout << "overlap_post: " << overlap_post << endl;
+    // cout << "rel_vel_post: " << rel_vel_post << endl;
+    // cout << "------------------------------------------" << endl;
+
+    // cout << "TE post corrected: " << TE_post_ij_corrected << endl << "Error: " << (TE_post_ij_corrected - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
+    // cout << "------------------------------------------" << endl;
+    
+    // cout << "Particle " << particle_i->particle_id << ": x=" << particle_i->x << ", y=" << particle_i->y << ", vx=" << particle_i->vx << ", vy=" << particle_i->vy << endl;
+    // cout << "Particle " << particle_j->particle_id << ": x=" << particle_j->x << ", y=" << particle_j->y << ", vx=" << particle_j->vx << ", vy=" << particle_j->vy << endl;
+    // cout << "------------------------------------------" << endl;
+
+    // cout << "distance_post_corrected: " << distance_post_corrected << endl;
+    // cout << "overlap_post_corrected: " << overlap_post_corrected << endl;
+    // cout << "rel_vel_post_corrected: " << rel_vel_post_corrected << endl;
+    // cout << "------------------------------------------" << endl;
+
+
 
 
 }
 
 
 
-void Engine::resolve_energy_gap(shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j, high_prec delta_E) {
-    // Adjust velocities to conserve total energy after overlap resolution
-
-    //print the delta_E
-    //cout << "To compensate for Delta E: " << delta_E << endl;
-
-    // Extract masses and velocities
-    high_prec m1 = particle_i->m;
-    high_prec m2 = particle_j->m;
-
-    // Compute collision normal based on updated positions
-    high_prec dx = particle_j->x - particle_i->x;
-    high_prec dy = particle_j->y - particle_i->y;
-    high_prec distance = hypot(dx, dy);
-
-    if (distance == 0.0) {
-        // Cannot compute normal; skip adjustment
-        return;
-    }
-
-    high_prec nx = dx / distance;
-    high_prec ny = dy / distance;
-
-    // Compute velocities along the normal
-    high_prec v1n = particle_i->vx * nx + particle_i->vy * ny;
-    high_prec v2n = particle_j->vx * nx + particle_j->vy * ny;
-
-    // Compute relative velocity along the normal
-    high_prec rel_vel = v2n - v1n;
-
-    // Compute reduced mass
-    high_prec reduced_mass = (m1 * m2) / (m1 + m2);
-
-    // Compute initial kinetic energy associated with relative motion along the normal
-    high_prec KE_rel = 0.5 * reduced_mass * rel_vel * rel_vel;
-
-    // Compute desired kinetic energy after adjustment to conserve total energy
-    high_prec KE_rel_after = KE_rel - delta_E;
-
-    // Ensure the new kinetic energy is non-negative
-    if (KE_rel_after < 0) {
-        KE_rel_after = 0;
-    }
-
-    // Compute the new relative velocity magnitude
-    high_prec rel_vel_after;
-    if (KE_rel_after == 0) {
-        rel_vel_after = 0;
-    } else {
-        rel_vel_after = sqrt(2 * KE_rel_after / reduced_mass);
-        // Preserve the direction of the relative velocity
-        if (rel_vel < 0) {
-            rel_vel_after = -rel_vel_after;
-        }
-    }
-
-    // Compute change in relative velocity
-    high_prec delta_rel_vel = rel_vel_after - rel_vel;
-
-    // Compute impulse
-    high_prec impulse = delta_rel_vel * reduced_mass;
-
-    // Adjust velocities along the normal direction
-
-    //print velocities before adjustment
-    //cout << "Particle 1: " << particle_i->particle_id << ", vx: " << particle_i->vx << ", vy: " << particle_i->vy << endl;
-    //cout << "Particle 2: " << particle_j->particle_id << ", vx: " << particle_j->vx << ", vy: " << particle_j->vy << endl;
-
-
-    particle_i->vx -= ((impulse / m1) * nx).convert_to<double>();
-    particle_i->vy -= ((impulse / m1) * ny).convert_to<double>();
-    particle_j->vx += ((impulse / m2) * nx).convert_to<double>();
-    particle_j->vy += ((impulse / m2) * ny).convert_to<double>();
-
+void Engine::resolve_energy_gap(std::shared_ptr<Particle> p1,
+                                std::shared_ptr<Particle> p2,
+                                high_prec delta_E) {
+    // Use minimum restitution for energy adjustment
+    const high_prec restitution = std::min(p1->rest, p2->rest);
     
+    // Mass calculations
+    const high_prec m1 = p1->m;
+    const high_prec m2 = p2->m;
+    const high_prec total_mass = m1 + m2;
+    
+    // Current velocities (convert to high precision)
+    high_prec v1[3] = {p1->vx, p1->vy, p1->vz};
+    high_prec v2[3] = {p2->vx, p2->vy, p2->vz};
+    
+    // Calculate collision normal from final positions
+    high_prec normal[3] = {
+        p2->x - p1->x,
+        p2->y - p1->y,
+        p2->z - p1->z
+    };
+    high_prec norm = sqrt(normal[0]*normal[0] + 
+                        normal[1]*normal[1] + 
+                        normal[2]*normal[2]);
+    if (norm == 0) return;  // Prevent division by zero
+    normal[0] /= norm; normal[1] /= norm; normal[2] /= norm;
+
+    // Center of mass velocity (conserved)
+    high_prec com_vel[3] = {
+        (m1*v1[0] + m2*v2[0]) / total_mass,
+        (m1*v1[1] + m2*v2[1]) / total_mass,
+        (m1*v1[2] + m2*v2[2]) / total_mass
+    };
+
+    // Relative velocities in COM frame
+    high_prec rel_v1[3] = {v1[0]-com_vel[0], v1[1]-com_vel[1], v1[2]-com_vel[2]};
+    high_prec rel_v2[3] = {v2[0]-com_vel[0], v2[1]-com_vel[1], v2[2]-com_vel[2]};
+
+    // Split into normal/tangential components
+    high_prec normal_speed = (rel_v2[0]-rel_v1[0])*normal[0] +
+                           (rel_v2[1]-rel_v1[1])*normal[1] +
+                           (rel_v2[2]-rel_v1[2])*normal[2];
+    
+    // Apply restitution to normal component
+    normal_speed *= -restitution;
+    
+    // Energy-constrained scaling factor
+    high_prec KE_before = 0.5 * m1 * (rel_v1[0]*rel_v1[0] + 
+                                     rel_v1[1]*rel_v1[1] + 
+                                     rel_v1[2]*rel_v1[2]) +
+                        0.5 * m2 * (rel_v2[0]*rel_v2[0] + 
+                                     rel_v2[1]*rel_v2[1] + 
+                                     rel_v2[2]*rel_v2[2]);
+    
+    high_prec KE_after = KE_before - delta_E;
+    if (KE_after < 0) KE_after = 0;
+    
+    const high_prec alpha = (KE_before > 0) ?
+    sqrt((KE_after + 0.5*total_mass*normal_speed*normal_speed) / KE_before) :
+    high_prec(0);
+
+    // Update velocities with both restitution and energy correction
+    for (int i = 0; i < 3; ++i) {
+        // Restitution adjustment
+        const high_prec dv = normal_speed * normal[i];
+        rel_v1[i] = alpha*rel_v1[i] - (m2/total_mass)*dv;
+        rel_v2[i] = alpha*rel_v2[i] + (m1/total_mass)*dv;
+        
+        // Convert back to lab frame
+        v1[i] = com_vel[i] + rel_v1[i];
+        v2[i] = com_vel[i] + rel_v2[i];
+    }
+
+    // Write back results with precision conversion
+    p1->vx = v1[0].convert_to<double>();
+    p1->vy = v1[1].convert_to<double>();
+    p1->vz = v1[2].convert_to<double>();
+    p2->vx = v2[0].convert_to<double>();
+    p2->vy = v2[1].convert_to<double>();
+    p2->vz = v2[2].convert_to<double>();
 }
 
 
 
 
-
-
-
-//     high_prec uncorrected_delta_E = delta_E;
-//     high_prec corrected_delta_E = 0.0;
-
-//     // Step 1: Adjust velocities to conserve energy
-
-//     //1a calculate how much of the gap should not be converted to kinetic energy, based on the average restitution. A value of 1 means all the gap should be converted to kinetic energy, while a value of 0 means none of the gap should be converted to kinetic energy
-
-
-//     high_prec kinetic_delta_E = delta_E * (e);
-
-
-//     // Retrieve current velocities for both particles
-//     high_prec vx1_new = particle_i->vx;
-//     high_prec vy1_new = particle_i->vy;
-//     high_prec vx2_new = particle_j->vx;
-//     high_prec vy2_new = particle_j->vy;
-
-//     // Compute initial normal velocities along the collision normal
-//     high_prec v1n = vx1_new * nx + vy1_new * ny;
-//     high_prec v2n = vx2_new * nx + vy2_new * ny;
-
-//     // Masses of particles
-//     high_prec m1 = particle_i->m;
-//     high_prec m2 = particle_j->m;
-
-//     // Set up the quadratic equation coefficients for delta_v1n
-//     high_prec a = 0.5 * m1 * (1 + m1 / m2);
-//     high_prec b = m1 * (v1n - v2n);
-//     high_prec c = -kinetic_delta_E;
-
-
-//     // Solve the quadratic equation
-//     high_prec discriminant = b * b - 4 * a * c;
-
-//     if (discriminant >= 0) {
-//         high_prec sqrt_discriminant = sqrt(discriminant);
-//         high_prec delta_v1n1 = (-b + sqrt_discriminant) / (2 * a);
-//         high_prec delta_v1n2 = (-b - sqrt_discriminant) / (2 * a);
-
-//         // Choose the solution that results in the smaller adjustment
-//         high_prec delta_v1n = abs(delta_v1n1) < abs(delta_v1n2) ? delta_v1n1 : delta_v1n2;
-
-//         // Calculate corresponding change in velocity for particle j
-//         high_prec delta_v2n = -(m1 / m2) * delta_v1n;
-
-//         // Update normal velocities with calculated changes
-//         high_prec v1n_new = v1n + delta_v1n;
-//         high_prec v2n_new = v2n + delta_v2n;
-
-//         // Tangential components (unchanged)
-//         high_prec v1t = vx1_new * (-ny) + vy1_new * nx;
-//         high_prec v2t = vx2_new * (-ny) + vy2_new * nx;
-
-//         // Reconstruct the updated velocities in x and y components
-//         particle_i->vx = (v1n_new * nx - v1t * ny).convert_to<double>();
-//         particle_i->vy = (v1n_new * ny + v1t * nx).convert_to<double>();
-//         particle_j->vx = (v2n_new * nx - v2t * ny).convert_to<double>();
-//         particle_j->vy = (v2n_new * ny + v2t * nx).convert_to<double>();
-
-//         // Calculate the corrected kinetic energy based on the velocity changes
-//         high_prec KE_initial = 0.5 * m1 * v1n * v1n + 0.5 * m2 * v2n * v2n;
-//         high_prec KE_corrected = 0.5 * m1 * v1n_new * v1n_new + 0.5 * m2 * v2n_new * v2n_new;
-//         corrected_delta_E = KE_corrected - KE_initial;
-
-//         // Update the remaining uncorrected energy
-//         uncorrected_delta_E -= corrected_delta_E;
-//     } else {
-//         cout << "Could not apply kinetic energy correction!" << endl;
-//     }
-
-//     // Step 2: Output the percentage of energy discrepancy corrected by velocity adjustments
-//     high_prec corrected_percentage = corrected_delta_E / delta_E;
-//     //cout << "Percentage of energy gap converted to kinetic energy: " << corrected_percentage * 100 << "%" << endl;
-
-//     // Step 3: Convert part of the energy gap to heat
-//     //high_prec remaining_delta_E = uncorrected_delta_E;
-//     high_prec heating_delta_E = delta_E - kinetic_delta_E;
-
-
-//     //cout << "Remaining energy discrepancy: " << remaining_delta_E << endl;
-//     high_prec HE = 0;
-//     //HE = heat_ij(heating_delta_E, particle_i, particle_j);
-
-    
-//     //cout << "Percentage of energy gap converted to heat: " << (HE) / delta_E * 100 << "%" << endl;
-
-//     // Step 4: Warn if remaining energy discrepancy exceeds threshold
-//     high_prec remaining_percentage = (delta_E - corrected_delta_E - HE) / delta_E;
-//     if (remaining_percentage > 0.001) {
-//         //cout << "Significant energy gap after velocity scaling & heat conversion: " << remaining_percentage * 100 << "%" << endl;
-//         //cout << "Remaining energy discrepancy: " << delta_E - corrected_delta_E - HE << endl;
-//     }
-// }
-    
 high_prec Engine::heat_ij(high_prec E, shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j){
 
     //convert the given energy to heat
@@ -673,7 +679,7 @@ void Engine::resolve_collisions(shared_ptr<Particles> particles) {
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
             //2a. check for collission between particle i and particle j
 
-            bool collission = check_collission(particles->particle_list[i], particles->particle_list[j], 0);
+            bool collission = check_collission(particles->particle_list[i], particles->particle_list[j], -0.000001);
             
             
             
@@ -690,12 +696,7 @@ void Engine::resolve_collisions(shared_ptr<Particles> particles) {
         }
     }
 
-    //cout << "Particles after collission resolution:" << endl;
-    //for (int i = 0; i < particles->particle_list.size(); i++) {
-    //    cout << "Particle " << i << ": x=" << particles->particle_list[i]->x << ", y=" << particles->particle_list[i]->y << ", z=" << particles->particle_list[i]->z << endl;
-
-    //}
-
+    
     
     
 }
@@ -710,18 +711,54 @@ bool Engine::check_collission(shared_ptr<Particle> particle1, shared_ptr<Particl
     
 
 
-    //2. check if the distance is smaller than the sum of the radii of the particles
-    if ((distance + threshold)<= particle1->rad + particle2->rad ) {
+    //2. check if the distance+threshold is smaller than the sum of the radii of the particles & relative velocity is 
+    if ((distance + threshold)< particle1->rad + particle2->rad ) {
+
+        //calculate relative velocity 
+        high_prec relative_velocity = hypot(particle1->vx - particle2->vx, particle1->vy - particle2->vy);
+       // high_prec velocity_threshold = compute_velocity_threshold(particle1, particle2, dt);
+
+
+
+        //if (relative_velocity < velocity_threshold) {
+
+            //cout << "Relative velocity is too low, assuming no collision" << endl;
+            //cout << "Relative velocity: " << relative_velocity << endl;
+            //cout << "Velocity threshold: " << velocity_threshold << endl;
+
+            
+
+            
+
+            
+
+            //return false;
+        //} else {
+            //cout << "relative velocity above threshold, assuming collision:" << velocity_threshold << endl;
+            //cout << "relative velocity: " << relative_velocity << endl;
+
+            //check if threshold is negative
+            //if (threshold < 0) {
+                //cout << "Threshold is negative" << endl;
+
+            //}
+        //}
 
         //print high_prec values for distance, radius sum and threshold
 
-        //high_prec distance_high_prec = distance;
-        //high_prec radius_sum_high_prec = particle1->rad + particle2->rad;
-        //high_prec threshold_high_prec = threshold;
+        high_prec distance_high_prec = distance;
+        high_prec radius_sum_high_prec = particle1->rad + particle2->rad;
+        high_prec threshold_high_prec = threshold;
 
-        //cout << "Distance: " << distance_high_prec << endl;
-        //cout << "Radius sum: " << radius_sum_high_prec << endl;
-        //cout << "Threshold: " << threshold_high_prec << endl;
+        // cout << "Distance: " << distance_high_prec << endl;
+        // cout << "Radius sum: " << radius_sum_high_prec << endl;
+        // cout << "Threshold: " << threshold_high_prec << endl;
+
+        // //print relative velocity, using hypot to calculate the magnitude
+        
+        // cout << "Relative velocity: " << relative_velocity << endl;
+
+
 
 
         return true;
@@ -735,9 +772,15 @@ bool Engine::check_collission(shared_ptr<Particle> particle1, shared_ptr<Particl
 void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
     // This function will resolve the collision between two particles
     //cout << "particle collission resolution started" << endl;
+    
+
+    //calculate TE before the collision
+    high_prec TE_pre = calc_TE_ij(particle1, particle2);
+
+
 
     //calculate the relative velocity, adjusted for mass
-    high_prec relative_velocity = sqrt(pow(particle1->vx - particle2->vx, 2) + pow(particle1->vy - particle2->vy, 2)) * sqrt(particle1->m / particle2->m);
+    //high_prec relative_velocity = sqrt(pow(particle1->vx - particle2->vx, 2) + pow(particle1->vy - particle2->vy, 2)) * sqrt(particle1->m / particle2->m);
     //cout << "Relative velocity: " << relative_velocity << endl;
 
     
@@ -816,24 +859,27 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
 
 
 
-    //if there is a positive energy loss, convert it to heat
-    //set a threshold for the relative velocity
-    high_prec rv_threshold = 0.1;
-
-    if (relative_velocity>rv_threshold) {
+    
 
 
-        //convert the energy loss to heat
-        heat_ij(energy_loss, particle1, particle2);
+    //convert the energy loss to heat
+    //heat_ij(energy_loss, particle1, particle2);
 
         
 
-    }
+    
+
+    //calculate TE after the collision
+    high_prec TE_post = calc_TE_ij(particle1, particle2);
+
+    //print the TE before and after the collision
+    //cout << "Collision TE error: " << TE_post - TE_pre << endl;
 }
 
 
 void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {//abandoned technique
     // This function resolves the gravitational attraction between particles using Euler's method. Not sufficiently accurate for energy conservation.
+    
 
     // Define a small value to avoid division by zero
 
@@ -844,6 +890,10 @@ void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {//abandoned
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
             // Skip self-interaction
             if (i == j) continue;
+
+            //calculate TE before the update
+            //high_prec TE_pre = calc_TE_ij(particles->particle_list[i], particles->particle_list[j]);
+            
 
             // Calculate the distance between particles i and j
             high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
@@ -924,6 +974,7 @@ void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
     // Step 2: Calculate and accumulate gravitational forces for all pairs
     for (int i = 0; i < n; i++) {
         for (int j = i + 1; j < n; j++) {
+            
             // Calculate distance components between particles i and j
             double dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
             double dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
@@ -1007,6 +1058,14 @@ void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
 
 
     }
+
+    //print the TE before and after the update
+
+    total_TE_error_verlet += TE_post - TE_pre;
+
+    //cout << "Verlet TE error: " << TE_post - TE_pre << endl;
+    
+
 }
 
 

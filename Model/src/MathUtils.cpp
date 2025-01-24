@@ -14,6 +14,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+const double G = 6.674 * pow(10, -11); //m^3 kg^-1 s^-2
+
+
 
 
 
@@ -97,3 +100,36 @@ Vector2D find_intersection(Line line1, Circle circle, Vector2D particle_coords) 
         return intersection2;
     }
 }
+
+// Function to calculate the velocity threshold for a collision
+high_prec compute_velocity_threshold(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2, double dt) {
+
+    //parameters to tweak
+    const double c2 = 1.0;  // dimensionless small multiplier
+    const double beta = 1.0; // exponent that might scale with dt
+
+    // Characteristic distance scale is sum of radii
+    // (avoid zero or negative by adding small epsilon)
+    double dist_scale = (particle1->rad + particle2->rad) + 1e-12;
+
+    // The combined mass
+    double M = particle1->m + particle2->m;
+
+    // A characteristic gravitational velocity scale ~ sqrt(G * M / dist_scale)
+    // or you could do G*M/dist_scale^2 * dt if you want linear in dt
+
+    //double velocity_scale = sqrt(G * M / dist_scale) * pow(dt, beta);
+
+    //calculate the velocity scale
+    high_prec velocity_scale = sqrt(G * M / dist_scale) * pow(dt, beta);
+
+
+
+
+
+    // Then multiply by dimensionless constant c2
+    high_prec threshold = c2 * velocity_scale;
+
+    return threshold;
+}
+
