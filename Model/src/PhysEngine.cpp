@@ -385,6 +385,14 @@ bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
     //cout << "Total TE error after overlap resolution - in resolve_overlap(): " << tTE_error*100 << "%" << endl;
 
     
+    
+
+    //check if momentum is conserved, taking into account that there is an x and y component
+    //if (abs(tmom_error.x) > error_threshold || abs(tmom_error.y) > error_threshold) {
+        //cout << "Momentum error after overlap resolution - in resolve_overlap(): " << tmom_error.x << " " << tmom_error.y << endl;
+    //}
+
+    //cout << "returning no_overlap: " << no_overlap << endl;
 
     return no_overlap;
 }
@@ -454,6 +462,10 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     particle_j->x = (x2_before + nx * d2).convert_to<double>();
     particle_j->y = (y2_before + ny * d2).convert_to<double>();
 
+    // --------------------------------------------------------------------
+    // Remove the "perfectly elastic impulse" block, because we rely on
+    // resolve_energy_gap(...) to do the final energy/momentum correction.
+    // --------------------------------------------------------------------
 
     // Re-check distances
     high_prec dx_new = particle_j->x - particle_i->x;
@@ -570,84 +582,127 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
 
 void Engine::resolve_energy_gap(std::shared_ptr<Particle> p1,
                                 std::shared_ptr<Particle> p2,
-                                high_prec delta_E) {
-    // Use minimum restitution for energy adjustment
-    const high_prec restitution = std::min(p1->rest, p2->rest);
-    
-    // Mass calculations
-    const high_prec m1 = p1->m;
-    const high_prec m2 = p2->m;
-    const high_prec total_mass = m1 + m2;
-    
-    // Current velocities (convert to high precision)
-    high_prec v1[3] = {p1->vx, p1->vy, p1->vz};
-    high_prec v2[3] = {p2->vx, p2->vy, p2->vz};
-    
-    // Calculate collision normal from final positions
-    high_prec normal[3] = {
-        p2->x - p1->x,
-        p2->y - p1->y,
-        p2->z - p1->z
-    };
-    high_prec norm = sqrt(normal[0]*normal[0] + 
-                        normal[1]*normal[1] + 
-                        normal[2]*normal[2]);
-    if (norm == 0) return;  // Prevent division by zero
-    normal[0] /= norm; normal[1] /= norm; normal[2] /= norm;
+                                boost::multiprecision::cpp_dec_float_50 delta_E)
+{
+    using high_prec = boost::multiprecision::cpp_dec_float_50;
 
-    // Center of mass velocity (conserved)
-    high_prec com_vel[3] = {
-        (m1*v1[0] + m2*v2[0]) / total_mass,
-        (m1*v1[1] + m2*v2[1]) / total_mass,
-        (m1*v1[2] + m2*v2[2]) / total_mass
-    };
+    // Masses
+    // high_prec m1 = p1->m;
+    // high_prec m2 = p2->m;
+    // high_prec M  = m1 + m2;
 
-    // Relative velocities in COM frame
-    high_prec rel_v1[3] = {v1[0]-com_vel[0], v1[1]-com_vel[1], v1[2]-com_vel[2]};
-    high_prec rel_v2[3] = {v2[0]-com_vel[0], v2[1]-com_vel[1], v2[2]-com_vel[2]};
+    // // Current velocities
+    // high_prec vx1 = p1->vx, vy1 = p1->vy;
+    // high_prec vx2 = p2->vx, vy2 = p2->vy;
 
-    // Split into normal/tangential components
-    high_prec normal_speed = (rel_v2[0]-rel_v1[0])*normal[0] +
-                           (rel_v2[1]-rel_v1[1])*normal[1] +
-                           (rel_v2[2]-rel_v1[2])*normal[2];
-    
-    // Apply restitution to normal component
-    normal_speed *= -restitution;
-    
-    // Energy-constrained scaling factor
-    high_prec KE_before = 0.5 * m1 * (rel_v1[0]*rel_v1[0] + 
-                                     rel_v1[1]*rel_v1[1] + 
-                                     rel_v1[2]*rel_v1[2]) +
-                        0.5 * m2 * (rel_v2[0]*rel_v2[0] + 
-                                     rel_v2[1]*rel_v2[1] + 
-                                     rel_v2[2]*rel_v2[2]);
-    
-    high_prec KE_after = KE_before - delta_E;
-    if (KE_after < 0) KE_after = 0;
-    
-    const high_prec alpha = (KE_before > 0) ?
-    sqrt((KE_after + 0.5*total_mass*normal_speed*normal_speed) / KE_before) :
-    high_prec(0);
+    // // 1) Center-of-mass velocity
+    // high_prec vxCM = (m1 * vx1 + m2 * vx2) / M;
+    // high_prec vyCM = (m1 * vy1 + m2 * vy2) / M;
 
-    // Update velocities with both restitution and energy correction
-    for (int i = 0; i < 3; ++i) {
-        // Restitution adjustment
-        const high_prec dv = normal_speed * normal[i];
-        rel_v1[i] = alpha*rel_v1[i] - (m2/total_mass)*dv;
-        rel_v2[i] = alpha*rel_v2[i] + (m1/total_mass)*dv;
-        
-        // Convert back to lab frame
-        v1[i] = com_vel[i] + rel_v1[i];
-        v2[i] = com_vel[i] + rel_v2[i];
+    // // 2) Relative velocities (lab frame -> COM frame)
+    // high_prec vx1_rel = vx1 - vxCM;
+    // high_prec vy1_rel = vy1 - vyCM;
+    // high_prec vx2_rel = vx2 - vxCM;
+    // high_prec vy2_rel = vy2 - vyCM;
+
+    // // 3) Current relative KE
+    // high_prec KE_rel_before =
+    //     0.5 * m1 * (vx1_rel*vx1_rel + vy1_rel*vy1_rel) +
+    //     0.5 * m2 * (vx2_rel*vx2_rel + vy2_rel*vy2_rel);
+
+    // // 4) Target relative KE after the fix
+    // high_prec KE_rel_after = KE_rel_before - delta_E;
+    // if (KE_rel_after < 0) KE_rel_after = 0; // can't go below 0
+    // if (KE_rel_before <= 0) return;        // no relative motion to scale
+
+    // // 5) Scale factor
+    // high_prec alpha = sqrt(KE_rel_after / KE_rel_before);
+
+    // // 6) Scale the relative velocities
+    // vx1_rel *= alpha;
+    // vy1_rel *= alpha;
+    // vx2_rel *= alpha;
+    // vy2_rel *= alpha;
+
+    // // 7) Map back to lab frame
+    // p1->vx = (vxCM + vx1_rel).convert_to<double>();
+    // p1->vy = (vyCM + vy1_rel).convert_to<double>();
+    // p2->vx = (vxCM + vx2_rel).convert_to<double>();
+    // p2->vy = (vyCM + vy2_rel).convert_to<double>();
+
+    // Adjust velocities to conserve total energy after overlap resolution
+
+    //print the delta_E
+    //cout << "To compensate for Delta E: " << delta_E << endl;
+
+    // Extract masses and velocities
+    high_prec m1 = p1->m;
+    high_prec m2 = p2->m;
+
+    // Compute collision normal based on updated positions
+    high_prec dx = p2->x - p1->x;
+    high_prec dy = p2->y - p1->y;
+    high_prec distance = hypot(dx, dy);
+
+    if (distance == 0.0) {
+        // Cannot compute normal; skip adjustment
+        return;
     }
 
-    // Write back results with precision conversion
-    p1->vx = v1[0].convert_to<double>();
-    p1->vy = v1[1].convert_to<double>();
-    p1->vz = v1[2].convert_to<double>();
-    p2->vx = v2[0].convert_to<double>();
-    p2->vy = v2[1].convert_to<double>();
-    p2->vz = v2[2].convert_to<double>();
+    high_prec nx = dx / distance;
+    high_prec ny = dy / distance;
+
+    // Compute velocities along the normal
+    high_prec v1n = p1->vx * nx + p1->vy * ny;
+    high_prec v2n = p2->vx * nx + p2->vy * ny;
+
+    // Compute relative velocity along the normal
+    high_prec rel_vel = v2n - v1n;
+
+    // Compute reduced mass
+    high_prec reduced_mass = (m1 * m2) / (m1 + m2);
+
+    // Compute initial kinetic energy associated with relative motion along the normal
+    high_prec KE_rel = 0.5 * reduced_mass * rel_vel * rel_vel;
+
+    // Compute desired kinetic energy after adjustment to conserve total energy
+    high_prec KE_rel_after = KE_rel - delta_E;
+
+    // Ensure the new kinetic energy is non-negative
+    if (KE_rel_after < 0) {
+        KE_rel_after = 0;
+    }
+
+    // Compute the new relative velocity magnitude
+    high_prec rel_vel_after;
+    if (KE_rel_after == 0) {
+        rel_vel_after = 0;
+    } else {
+        rel_vel_after = sqrt(2 * KE_rel_after / reduced_mass);
+        // Preserve the direction of the relative velocity
+        if (rel_vel < 0) {
+            rel_vel_after = -rel_vel_after;
+        }
+    }
+
+    // Compute change in relative velocity
+    high_prec delta_rel_vel = rel_vel_after - rel_vel;
+
+    // Compute impulse
+    high_prec impulse = delta_rel_vel * reduced_mass;
+
+    // Adjust velocities along the normal direction
+
+    //print velocities before adjustment
+    //cout << "Particle 1: " << particle_i->particle_id << ", vx: " << particle_i->vx << ", vy: " << particle_i->vy << endl;
+    //cout << "Particle 2: " << particle_j->particle_id << ", vx: " << particle_j->vx << ", vy: " << particle_j->vy << endl;
+
+
+    p1->vx -= ((impulse / m1) * nx).convert_to<double>();
+    p1->vy -= ((impulse / m1) * ny).convert_to<double>();
+    p2->vx += ((impulse / m2) * nx).convert_to<double>();
+    p2->vy += ((impulse / m2) * ny).convert_to<double>();
+
 }
 
 
