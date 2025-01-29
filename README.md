@@ -53,6 +53,14 @@ Source files:
 
 ## DevNotes
 
+Update (25/1):
+
+After working on and off for the last 4 months on this project, I managed to get inelastic collissions working, so that particles behave in a physically realistic way (clumping together while retaining linear and angular momentum) and converting KE to heat, which shows visually as particles brightening. An issue I was not able to solve is that seemingly, energy is created from nothing. I will take a break (though not abandon just yet) from this project to focus on my mathematics learning (MST125 at Open University) and perhaps start another python/c++ sideproject. 
+
+Next steps (25/1/25)
+My best guesses is that the issue of increasing energy is that this has something to do with overlap resolution  An issue I was not able to solve is that seemingly, energy is created from nothing once particles are collided (leading to disintegration of the system). My best guesses is that this has something to do with overlap resolution 
+Possible next steps to look into a solution is to investigate why it seems that after some time a 2-body inelastic colliding system seems to converge and not build up additional energy. Another clue is that this convergence seems to happen much later when the timestep is smaller. I would guess that the way I correct for energy difference after geometrically separating particles has issues in the math. Two alternative things to explore is if the issue is numeral inaccuracy (particle structure is still double datatype even though calculations are almost all high_prec datatype) or a wrong order of overlap resolution, collission resolution and verlet integration. (see .PNG for illustration, note the initial drop is expected due to conversion of KE to HE).
+
 Next steps (29/9/24):
 *	Complex object rendering, Saving and retrieving from cache (conditional on cache param in scenario specified). Support for circle only is fine [DONE]
         should include manual inputs into complex name groups "with group defined particles are rendered from the same complex object" to allow for easier user input. Satisfies the GUI criteria for the project. [DONE]
