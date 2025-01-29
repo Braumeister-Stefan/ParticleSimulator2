@@ -8,3 +8,4 @@ SimpleBounce,"alpha,beta",50000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
 Teconservationtester2,"kappa,gamma",100000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
 Teconservationtester3,"kappa,gamma",2000,GRAVITY+KINETICS,FALSE,TRUE,1,FALSE
 overlapfailmre,sigma,5000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
+SimpleBounce_step1,"alpha,beta",1000,GRAVITY+KINETICS,FALSE,TRUE,1,FALSE
