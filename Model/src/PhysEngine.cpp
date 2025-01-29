@@ -523,55 +523,55 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
 
 
     //Print all informations as above in a clear format
-    // cout << "------------------------------------------" << endl;
-    // cout << "Update iteration: " << update_iter << endl;
-    // cout << "Overlap iteration: " << overlap_iter << endl;
+    cout << "------------------------------------------" << endl;
+    cout << "Update iteration: " << update_iter << endl;
+    cout << "Overlap iteration: " << overlap_iter << endl;
 
     
 
 
-    // cout << "------------------------------------------" << endl;
-    // cout << "Particle minimum restitution: " << min_restitution << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "------------------------------------------" << endl;
+    cout << "Particle minimum restitution: " << min_restitution << endl;
+    cout << "------------------------------------------" << endl;
 
 
-    // cout << "Particle " << particle_i->particle_id << ": x=" << x1_before << ", y=" << y1_before << ", vx=" << vx1_before << ", vy=" << vy1_before << endl;
-    // cout << "Particle " << particle_j->particle_id << ": x=" << x2_before << ", y=" << y2_before << ", vx=" << vx2_before << ", vy=" << vy2_before << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "Particle " << particle_i->particle_id << ": x=" << x1_before << ", y=" << y1_before << ", vx=" << vx1_before << ", vy=" << vy1_before << endl;
+    cout << "Particle " << particle_j->particle_id << ": x=" << x2_before << ", y=" << y2_before << ", vx=" << vx2_before << ", vy=" << vy2_before << endl;
+    cout << "------------------------------------------" << endl;
 
     
-    // cout << "TE pre: " << TE_pre_ij <<  endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "TE pre: " << TE_pre_ij <<  endl;
+    cout << "------------------------------------------" << endl;
 
-    // cout << "distance_pre: " << distance_pre << endl;
-    // cout << "overlap_pre: " << overlap_pre << endl;
-    // cout << "rel_vel_pre: " << rel_vel_pre << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "distance_pre: " << distance_pre << endl;
+    cout << "overlap_pre: " << overlap_pre << endl;
+    cout << "rel_vel_pre: " << rel_vel_pre << endl;
+    cout << "------------------------------------------" << endl;
 
-    // cout << "------------------------------------------" << endl;
-    // cout << "TE post: " << TE_post_ij << endl << "Error: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "------------------------------------------" << endl;
+    cout << "TE post: " << TE_post_ij << endl << "Error: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
+    cout << "------------------------------------------" << endl;
 
-    // cout << "Particle " << particle_i->particle_id << ": x=" << x1_post << ", y=" << y1_post << ", vx=" << vx1_post << ", vy=" << vy1_post << endl;
-    // cout << "Particle " << particle_j->particle_id << ": x=" << x2_post << ", y=" << y2_post << ", vx=" << vx2_post << ", vy=" << vy2_post << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "Particle " << particle_i->particle_id << ": x=" << x1_post << ", y=" << y1_post << ", vx=" << vx1_post << ", vy=" << vy1_post << endl;
+    cout << "Particle " << particle_j->particle_id << ": x=" << x2_post << ", y=" << y2_post << ", vx=" << vx2_post << ", vy=" << vy2_post << endl;
+    cout << "------------------------------------------" << endl;
 
-    // cout << "distance_post: " << distance_post << endl;
-    // cout << "overlap_post: " << overlap_post << endl;
-    // cout << "rel_vel_post: " << rel_vel_post << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "distance_post: " << distance_post << endl;
+    cout << "overlap_post: " << overlap_post << endl;
+    cout << "rel_vel_post: " << rel_vel_post << endl;
+    cout << "------------------------------------------" << endl;
 
-    // cout << "TE post corrected: " << TE_post_ij_corrected << endl << "Error: " << (TE_post_ij_corrected - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "TE post corrected: " << TE_post_ij_corrected << endl << "Error: " << (TE_post_ij_corrected - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
+    cout << "------------------------------------------" << endl;
     
-    // cout << "Particle " << particle_i->particle_id << ": x=" << particle_i->x << ", y=" << particle_i->y << ", vx=" << particle_i->vx << ", vy=" << particle_i->vy << endl;
-    // cout << "Particle " << particle_j->particle_id << ": x=" << particle_j->x << ", y=" << particle_j->y << ", vx=" << particle_j->vx << ", vy=" << particle_j->vy << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "Particle " << particle_i->particle_id << ": x=" << particle_i->x << ", y=" << particle_i->y << ", vx=" << particle_i->vx << ", vy=" << particle_i->vy << endl;
+    cout << "Particle " << particle_j->particle_id << ": x=" << particle_j->x << ", y=" << particle_j->y << ", vx=" << particle_j->vx << ", vy=" << particle_j->vy << endl;
+    cout << "------------------------------------------" << endl;
 
-    // cout << "distance_post_corrected: " << distance_post_corrected << endl;
-    // cout << "overlap_post_corrected: " << overlap_post_corrected << endl;
-    // cout << "rel_vel_post_corrected: " << rel_vel_post_corrected << endl;
-    // cout << "------------------------------------------" << endl;
+    cout << "distance_post_corrected: " << distance_post_corrected << endl;
+    cout << "overlap_post_corrected: " << overlap_post_corrected << endl;
+    cout << "rel_vel_post_corrected: " << rel_vel_post_corrected << endl;
+    cout << "------------------------------------------" << endl;
 
 
 
