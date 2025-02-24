@@ -48,6 +48,17 @@ int overlap_iter = 0;
 int overlap_ij_iter = 0;
 int update_iter = 0;
 
+//variables storing marginal error metrics
+static double s_prev_TE = -1;
+static double s_prev_step = -1;
+static double s_margin_TE_error = 0.0;
+
+static double s_margin_TE_error_overlap  = 0.0;
+static double s_margin_TE_error_collision = 0.0;
+static double s_margin_TE_error_integrate = 0.0;
+
+
+
 
 
 //define static member variables
@@ -63,260 +74,166 @@ Engine::~Engine() {
     cout << "Engine destroyed." << endl;
 }
 
+double Engine::get_margin_TE_error() {
+    return s_margin_TE_error;
+}
+
+double Engine::get_margin_TE_error_overlap()   { return s_margin_TE_error_overlap; }
+double Engine::get_margin_TE_error_collision() { return s_margin_TE_error_collision; }
+double Engine::get_margin_TE_error_integrate() { return s_margin_TE_error_integrate; }
+
 // Run the simulation and return snapshots of each time step
-shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles) {
+shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
+{
     cout << "Engine is initialized." << endl;
 
-    
-    
-
-    //1. initialize the snapshots object
+    // 1. Initialize the snapshots object
     shared_ptr<snapshots> particle_states = make_shared<snapshots>();
-
-
-    //2.confirm that the run should start. If a dump file is available, ask the user if they want to use it, if yes save to snapshots object and return it.
-
 
     cout << scenario->name << "'s initial states loaded" << endl << endl;
     cout << "Press enter to start the simulation." << endl;
     cin.ignore();
     cin.get();
 
-
-
-
-    //3. Initialize the time step globally and calculate the number of steps
-
+    // 3. Initialize time step
     Engine::dt = scenario->dt;
-    //cout << "Total time of the simulation: " << scenario->time << " s" << endl;
-    //cout << "Time step length: " << scenario->dt << " s" << endl;
-
     double steps_db = scenario->time / scenario->dt;
     int steps = static_cast<int>(steps_db);
-
     cout << "Number of steps to be simulated: " << steps << endl << endl;
 
-    //4. loop through the steps as defined in the scenario
+    // Ensure metrics vector is sized
+    particle_states->metrics.resize(steps, nullptr);
 
+    // 4. Main loop
     for (int i = 0; i < steps; i++) {
 
+        if (!particle_states->metrics[i]) {
+            particle_states->metrics[i] = make_shared<test_metrics_t>();
+        }
 
-        //save start time
+        if (i >= 6401) {
+            // Potential debug pause
+        }
+
         auto start_time = high_resolution_clock::now();
-
-        //1.add current state of particles to the snapshots object
-        auto particles_copy = make_unique<Particles>(*particles);
-
-        particle_states->snaps.push_back(move(particles_copy));
-        //if instead we want to add it to the first element of the snapshots object, we can use the following line
-
-        //2. Update the state of the particles
-
-        //cout << "Updating particles..." << endl;
-        double error_threshold = 0.05;
-        
-        //print the current step
-        //cout << "Step " << i << " of the simulation." << endl;
+        update_iter = i;
 
         double te_pre_update = calc_TE(particles);
         momentum mom_pre_update = calc_mom(particles);
-        update_iter = i;
+
+        // Call update_particles
         update_particles(particles);
+
         double te_post_update = calc_TE(particles);
         momentum mom_post_update = calc_mom(particles);
 
-        double te_error_update = (te_post_update - te_pre_update) / te_pre_update;
+        // Copy final state for this step
+        auto particles_copy = make_unique<Particles>(*particles);
+        particle_states->snaps.push_back(move(particles_copy));
 
-        if (te_error_update > error_threshold) {
+        // Store the overall margin error
+        double margin_TE_error = get_margin_TE_error();
+        particle_states->metrics[i]->margin_TE_error = margin_TE_error;
+
+        // Also store the three substep marginal errors
+        double margin_overlap   = get_margin_TE_error_overlap();
+        double margin_collision = get_margin_TE_error_collision();
+        double margin_integrate = get_margin_TE_error_integrate();
+        particle_states->metrics[i]->margin_TE_error_overlap   = margin_overlap;
+        particle_states->metrics[i]->margin_TE_error_collision = margin_collision;
+        particle_states->metrics[i]->margin_TE_error_integrate = margin_integrate;
+
+        double te_error_update = (te_post_update - te_pre_update) / te_pre_update;
+        if (te_error_update > 0.05) {
             cout << "TE error in run(): " << te_error_update << endl;
         }
 
-        double mom_error_x_update = (mom_post_update.x - mom_pre_update.x) / mom_pre_update.x;
-        double mom_error_y_update = (mom_post_update.y - mom_pre_update.y) / mom_pre_update.y;
-
-        if (mom_error_x_update > error_threshold || mom_error_y_update > error_threshold) {
-            //cout << "Momentum error in run(): " << mom_error_x_update << " " << mom_error_y_update << endl;
-        }
-
-
-
-        //print every 5% of the simulation
         if (i % (steps / 20) == 0) {
             cout << i / (steps / 100) << "% of the simulation complete." << endl;
         }
 
-        //save end time
         auto end_time = high_resolution_clock::now();
-
-        //calculate the time taken to complete the step
         duration<double> time_taken = end_time - start_time;
-
-        //save fps to the metrics object in the snapshots object
-        particle_states->metrics.push_back(make_shared<test_metrics_t>());
-
         particle_states->metrics[i]->fps = 1 / time_taken.count();
-
     }
 
-    //5.confirm that the run has ended
-
     cout << scenario->name << " simulation completed." << endl << endl;
-
-    cout << "Total TE error (sum of parts): " << total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet << endl;
-
-    cout << "% overlap error: " << total_TE_error_overlap / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet) * 100 << endl;
-    cout << "% collision error: " << total_TE_error_collision / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet) * 100 << endl;
-    cout << "% verlet error: " << total_TE_error_verlet / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet) * 100 << endl;
+    cout << "Total TE error (sum of parts): "
+         << total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet << endl;
+    cout << "% overlap error: "
+         << total_TE_error_overlap
+            / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet)
+            * 100 << endl;
+    cout << "% collision error: "
+         << total_TE_error_collision
+            / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet)
+            * 100 << endl;
+    cout << "% verlet error: "
+         << total_TE_error_verlet
+            / (total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet)
+            * 100 << endl;
 
     cout << "Total energy gap corrections: " << energy_gap_corrections << endl;
     cout << "Total energy gap corrections incomplete: " << energy_gap_corrections_incomplete << endl;
-    //cout << "Total energy gap corrections incomplete in %: " << (energy_gap_corrections_incomplete / energy_gap_corrections) * 100 << endl;
-
-    //6. save down snapshots to the csv 
 
     run_to_cache(scenario, particle_states);
-
     return particle_states;
-
-
 }
 
 
 
 
-void Engine::update_particles(shared_ptr<Particles> particles) {
-    //this function will update the particles in the particles object
-
-    double error_threshold = 0.05;
-    
-    //1 resolve overlap
-    //double te_pre_overlap = calc_TE(particles);
-
-
-    //shared_ptr<backed_scaler> scaler;
-
-    //iterate 8 times through the overlap resolution
-
+void Engine::update_particles(shared_ptr<Particles> particles)
+{
     bool no_overlap = false;
-
     double te_pre_overlap = calc_TE(particles);
-    //momentum mom_pre_overlap = calc_mom(particles);
 
+    // Overlap resolution
     for (int i = 0; i < 8; i++) {
-        //print i
-        //cout << "Overlap resolution iteration: " << i << endl;
-
-        //cout << "Starting overlap iteration: " << i << endl;
-
-        //cout << "no_overlap in update_particles(): " << no_overlap << endl;
-
-        double te_pre_overlap_iter = calc_TE(particles);
-        //momentum mom_pre_overlap_iter = calc_mom(particles);
-
-        if (no_overlap) {
-            //cout << "no_overlap is true, breaking loop" << endl;
-            break;  
-        } else {
-            
-            no_overlap = true;
-
-            //cout << "no_overlap is false, resolving overlap" << endl;
-            overlap_iter = i;
-
-            no_overlap = resolve_overlap(particles);
-        }
-
-        // double te_post_overlap_iter = calc_TE(particles);
-        // momentum mom_post_overlap_iter = calc_mom(particles);
-
-        // double te_error_overlap_iter = (te_post_overlap_iter - te_pre_overlap_iter) / te_pre_overlap_iter;
-        // momentum mom_error_overlap_iter = (mom_post_overlap_iter - mom_pre_overlap_iter) / mom_pre_overlap_iter;
-
-        // if (te_error_overlap_iter > error_threshold) {
-        //     //cout << "TE error overlap - for iteration in update_particles()" << i << " :" << te_error_overlap_iter << endl;
-        // }
-
-        // if (mom_error_overlap_iter.x > error_threshold || mom_error_overlap_iter.y > error_threshold) {
-        //     //cout << "Momentum error overlap - for iteration in update_particles()" << i << " :" << mom_error_overlap_iter.x << " " << mom_error_overlap_iter.y << endl;
-        // }
-
-        //output the momentum pre and post //problem is not here
-        //cout << "x momentum diff: " << mom_post_overlap_iter.x - mom_pre_overlap_iter.x << endl;
-        //cout << "x momentum diff abs: " << abs(mom_post_overlap_iter.x - mom_pre_overlap_iter.x) << endl;
-
-        //cout << "current x momentum: " << mom_post_overlap_iter.x << endl;
-        //cout << "end of iteration" << endl;
-
-        //stop the loop if the momentum difference is more than 0.0001
-        //if (abs(mom_post_overlap_iter.x - mom_pre_overlap_iter.x) > 0.0001) {
-        //    cout << "momentum difference is more than 0.0001" << endl;
-        //}
-        
+        if (no_overlap) break;
+        no_overlap = true;
+        overlap_iter = i;
+        no_overlap = resolve_overlap(particles);
     }
-    
-    //scaler = resolve_overlap(particles);
-
-
     double te_post_overlap = calc_TE(particles);
-    //momentum mom_post_overlap = calc_mom(particles);
-
     double te_error_overlap = (te_post_overlap - te_pre_overlap) / te_pre_overlap;
-    //momentum mom_error_overlap = (mom_post_overlap - mom_pre_overlap) / mom_pre_overlap;
-
-    //if (te_error_overlap > error_threshold) {
-    //    cout << "TE error overlap - update func: " << te_error_overlap << endl;
-    //}
-
-    //if (mom_error_overlap.x > error_threshold || mom_error_overlap.y > error_threshold) {
-    //    cout << "Momentum error overlap - update func: " << mom_error_overlap.x << " " << mom_error_overlap.y << endl;
-    //}
-    
-    //2 resolve collissions
-
-    //cout << "Resolving collissions..." << endl;
-    double te_pre_collission = calc_TE(particles);
-    //momentum mom_pre_collission = calc_mom(particles);
-
-
-    resolve_collisions(particles);
-    double te_post_collission = calc_TE(particles);
-    //momentum mom_post_collission = calc_mom(particles);
-
-    double te_error_collission = (te_post_collission - te_pre_collission) / te_pre_collission;
-
-    if (te_error_collission > error_threshold) {
-        cout << "TE error collission: " << te_error_collission << endl;
+    if (te_error_overlap > 0.05) {
+        cout << "TE error overlap: " << te_error_overlap << endl;
     }
+    // Store substep margin for overlap
+    s_margin_TE_error_overlap = te_post_overlap - te_pre_overlap;
 
-    //momentum mom_diff_collission = mom_post_collission - mom_pre_collission;
+    // Collisions
+    double te_pre_collision = calc_TE(particles);
+    resolve_collisions(particles);
+    double te_post_collision = calc_TE(particles);
+    double te_error_collision = (te_post_collision - te_pre_collision) / te_pre_collision;
+    if (te_error_collision > 0.05) {
+        cout << "TE error collision: " << te_error_collision << endl;
+    }
+    // Store substep margin for collision
+    s_margin_TE_error_collision = te_post_collision - te_pre_collision;
 
-    //if (abs(mom_diff_collission.x) > 0.0001) {
-        //cout << "Momentum difference in collission: " << mom_diff_collission.x << endl;
-        //cout << "x momentum currently: " << mom_post_collission.x << endl;
-
-    //}
-
-    //2. resolve gravitational attraction
-
-    //cout << "Resolving gravity..." << endl;
-    //resolve_gravity_euler(particles);
-
+    // Gravity (Velocity Verlet)
     double te_pre_verlet = calc_TE(particles);
-    resolve_gravity_verlet(particles); //use velocity verlet method
+    resolve_gravity_verlet(particles);
     double te_post_verlet = calc_TE(particles);
     double te_error_verlet = (te_post_verlet - te_pre_verlet) / te_pre_verlet;
-
-    if (te_error_verlet > error_threshold) {
+    if (te_error_verlet > 0.05) {
         cout << "TE error verlet: " << te_error_verlet << endl;
     }
-    //cout << "TE error: " << te_error_verlet << endl;
+    // Store substep margin for integration
+    s_margin_TE_error_integrate = te_post_verlet - te_pre_verlet;
 
-    //3. update the locations of the particles (done inside velocity verlet method, but not in euler method)
-    //update_locations(particles, scaler);
-    
-    
-
-    
+    // Now final TE for overall margin
+    double current_TE_post = calc_TE(particles);
+    if (s_prev_step >= 0 && update_iter == s_prev_step + 1) {
+        s_margin_TE_error = current_TE_post - s_prev_TE;
+    } else {
+        s_margin_TE_error = 0.0;
+    }
+    s_prev_TE   = current_TE_post;
+    s_prev_step = update_iter;
 }
 
 bool Engine::resolve_overlap(shared_ptr<Particles> particles) {
@@ -401,10 +318,8 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
 {
     //cout << "Resolving overlap between particles_ij triggered" << endl;
 
-    //increment the overlap_ij_iter
+    // Increment the overlap_ij_iter
     overlap_ij_iter++;
-
-    
 
     // Define thresholds
     high_prec error_threshold = 0.0001;
@@ -419,16 +334,43 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec vx2_before = particle_j->vx;
     high_prec vy2_before = particle_j->vy;
 
-    //store distance, overlap, and relative velocity pre-collision
+    // Store distance, overlap, and relative velocity pre-collision
     high_prec distance_pre = hypot(x2_before - x1_before, y2_before - y1_before);
     high_prec overlap_pre = (particle_i->rad + particle_j->rad) - distance_pre;
-    high_prec rel_vel_pre = (vx2_before - vx1_before) * (x2_before - x1_before) + (vy2_before - vy1_before) * (y2_before - y1_before);
+    high_prec rel_vel_pre = (vx2_before - vx1_before) * (x2_before - x1_before) +
+                            (vy2_before - vy1_before) * (y2_before - y1_before);
 
-
+    // Calculate initial total kinetic energy using calc_TE_ij
     high_prec TE_pre_ij = calc_TE_ij(particle_i, particle_j);
+
+    // Calculate initial kinetic energies in the normal and tangential directions
+    high_prec normal_x = (x2_before - x1_before) / distance_pre;
+    high_prec normal_y = (y2_before - y1_before) / distance_pre;
+    high_prec tangential_x = -normal_y;
+    high_prec tangential_y = normal_x;
+
+    high_prec v1n = vx1_before * normal_x + vy1_before * normal_y;
+    high_prec v2n = vx2_before * normal_x + vy2_before * normal_y;
+    high_prec v1t = vx1_before * tangential_x + vy1_before * tangential_y;
+    high_prec v2t = vx2_before * tangential_x + vy2_before * tangential_y;
+
+    high_prec m1 = particle_i->m;
+    high_prec m2 = particle_j->m;
+    high_prec reduced_mass = (m1 * m2) / (m1 + m2);
+
+    high_prec KE_rel_n_initial = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
+    high_prec KE_rel_t_initial = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
+
+    // Print the initial kinetic energy information in a structured way
+    // std::cout << "=== Initial Kinetic Energy Information ===" << std::endl;
+    // std::cout << "Total Kinetic Energy (TE_pre_ij): " << TE_pre_ij << std::endl;
+    // std::cout << "Normal Kinetic Energy: " << KE_rel_n_initial << std::endl;
+    // std::cout << "Tangential Kinetic Energy: " << KE_rel_t_initial << std::endl;
+
+    //check that normal+ tangential KE = total KE
+    //cout << "NKE + TKE " << KE_rel_n_initial + KE_rel_t_initial << endl;
+
     momentum mom_pre_ij = calc_mom_ij(particle_i, particle_j);
-
-
 
     // Compute overlap
     high_prec dx = x2_before - x1_before;
@@ -450,8 +392,6 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec ny = dy / distance;
 
     // Displacements
-    high_prec m1 = particle_i->m;
-    high_prec m2 = particle_j->m;
     high_prec total_mass = m1 + m2;
     high_prec d1 = (overlap * m2) / total_mass;
     high_prec d2 = (overlap * m1) / total_mass;
@@ -480,10 +420,20 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec TE_post_ij = calc_TE_ij(particle_i, particle_j);
     momentum mom_post_ij = calc_mom_ij(particle_i, particle_j);
 
-    //Store post-collision data, positions and velocities
-    high_prec distance_post = hypot(dx_new, dy_new);
+    // Print the kinetic energy right before calling resolve_energy_gap
+    // std::cout << "=== Kinetic Energy Before Energy Gap Resolution ===" << std::endl;
+    // std::cout << "Total Kinetic Energy (TE_post_ij): " << TE_post_ij << std::endl;
+    // //breakdown in normal and tangential components
+    // high_prec KE_rel_n_post = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
+    // high_prec KE_rel_t_post = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
+    // std::cout << "Normal Kinetic Energy: " << KE_rel_n_post << std::endl;
+    // std::cout << "Tangential Kinetic Energy: " << KE_rel_t_post << std::endl;
+    // cout << "NKE + TKE " << KE_rel_n_post + KE_rel_t_post << endl;
 
-    high_prec rel_vel_post = (particle_j->vx - particle_i->vx) * dx_new + (particle_j->vy - particle_i->vy) * dy_new;
+    // Store post-collision data, positions and velocities
+    high_prec distance_post = distance_new;
+    high_prec rel_vel_post = (particle_j->vx - particle_i->vx) * dx_new +
+                             (particle_j->vy - particle_i->vy) * dy_new;
     
     high_prec x1_post = particle_i->x;
     high_prec y1_post = particle_i->y;
@@ -494,216 +444,173 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec vx2_post = particle_j->vx;
     high_prec vy2_post = particle_j->vy;
 
-
-
-
-
-    
     if (TE_post_ij != TE_pre_ij) {
         high_prec delta_E = TE_post_ij - TE_pre_ij;
+        //cout << "Energy gap detected: " << delta_E << endl;
         resolve_energy_gap(particle_i, particle_j, delta_E);
 
         
-        
 
-        
+
     }
 
-    //After correction, check again
-    high_prec TE_post_ij_corrected = calc_TE_ij(particle_i, particle_j);
+
+
+
+
     high_prec distance_post_corrected = hypot(dx_new, dy_new);
     high_prec overlap_post_corrected = (particle_i->rad + particle_j->rad) - distance_post_corrected;
-
-    high_prec rel_vel_post_corrected = (particle_j->vx - particle_i->vx) * dx_new + (particle_j->vy - particle_i->vy) * dy_new;
+    high_prec rel_vel_post_corrected = (particle_j->vx - particle_i->vx) * dx_new +
+                                       (particle_j->vy - particle_i->vy) * dy_new;
     
-
-
     high_prec min_restitution = min(particle_i->rest, particle_j->rest);
-
-
-
-    //Print all informations as above in a clear format
-    cout << "------------------------------------------" << endl;
-    cout << "Update iteration: " << update_iter << endl;
-    cout << "Overlap iteration: " << overlap_iter << endl;
-
-    
-
-
-    cout << "------------------------------------------" << endl;
-    cout << "Particle minimum restitution: " << min_restitution << endl;
-    cout << "------------------------------------------" << endl;
-
-
-    cout << "Particle " << particle_i->particle_id << ": x=" << x1_before << ", y=" << y1_before << ", vx=" << vx1_before << ", vy=" << vy1_before << endl;
-    cout << "Particle " << particle_j->particle_id << ": x=" << x2_before << ", y=" << y2_before << ", vx=" << vx2_before << ", vy=" << vy2_before << endl;
-    cout << "------------------------------------------" << endl;
-
-    
-    cout << "TE pre: " << TE_pre_ij <<  endl;
-    cout << "------------------------------------------" << endl;
-
-    cout << "distance_pre: " << distance_pre << endl;
-    cout << "overlap_pre: " << overlap_pre << endl;
-    cout << "rel_vel_pre: " << rel_vel_pre << endl;
-    cout << "------------------------------------------" << endl;
-
-    cout << "------------------------------------------" << endl;
-    cout << "TE post: " << TE_post_ij << endl << "Error: " << (TE_post_ij - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
-    cout << "------------------------------------------" << endl;
-
-    cout << "Particle " << particle_i->particle_id << ": x=" << x1_post << ", y=" << y1_post << ", vx=" << vx1_post << ", vy=" << vy1_post << endl;
-    cout << "Particle " << particle_j->particle_id << ": x=" << x2_post << ", y=" << y2_post << ", vx=" << vx2_post << ", vy=" << vy2_post << endl;
-    cout << "------------------------------------------" << endl;
-
-    cout << "distance_post: " << distance_post << endl;
-    cout << "overlap_post: " << overlap_post << endl;
-    cout << "rel_vel_post: " << rel_vel_post << endl;
-    cout << "------------------------------------------" << endl;
-
-    cout << "TE post corrected: " << TE_post_ij_corrected << endl << "Error: " << (TE_post_ij_corrected - TE_pre_ij) / TE_pre_ij*100 << "%" << endl;
-    cout << "------------------------------------------" << endl;
-    
-    cout << "Particle " << particle_i->particle_id << ": x=" << particle_i->x << ", y=" << particle_i->y << ", vx=" << particle_i->vx << ", vy=" << particle_i->vy << endl;
-    cout << "Particle " << particle_j->particle_id << ": x=" << particle_j->x << ", y=" << particle_j->y << ", vx=" << particle_j->vx << ", vy=" << particle_j->vy << endl;
-    cout << "------------------------------------------" << endl;
-
-    cout << "distance_post_corrected: " << distance_post_corrected << endl;
-    cout << "overlap_post_corrected: " << overlap_post_corrected << endl;
-    cout << "rel_vel_post_corrected: " << rel_vel_post_corrected << endl;
-    cout << "------------------------------------------" << endl;
-
-
-
-
 }
 
 
 
 void Engine::resolve_energy_gap(std::shared_ptr<Particle> p1,
-                                std::shared_ptr<Particle> p2,
-                                boost::multiprecision::cpp_dec_float_50 delta_E)
+    std::shared_ptr<Particle> p2,
+    boost::multiprecision::cpp_dec_float_50 delta_E)
 {
     using high_prec = boost::multiprecision::cpp_dec_float_50;
 
-    // Masses
-    // high_prec m1 = p1->m;
-    // high_prec m2 = p2->m;
-    // high_prec M  = m1 + m2;
-
-    // // Current velocities
-    // high_prec vx1 = p1->vx, vy1 = p1->vy;
-    // high_prec vx2 = p2->vx, vy2 = p2->vy;
-
-    // // 1) Center-of-mass velocity
-    // high_prec vxCM = (m1 * vx1 + m2 * vx2) / M;
-    // high_prec vyCM = (m1 * vy1 + m2 * vy2) / M;
-
-    // // 2) Relative velocities (lab frame -> COM frame)
-    // high_prec vx1_rel = vx1 - vxCM;
-    // high_prec vy1_rel = vy1 - vyCM;
-    // high_prec vx2_rel = vx2 - vxCM;
-    // high_prec vy2_rel = vy2 - vyCM;
-
-    // // 3) Current relative KE
-    // high_prec KE_rel_before =
-    //     0.5 * m1 * (vx1_rel*vx1_rel + vy1_rel*vy1_rel) +
-    //     0.5 * m2 * (vx2_rel*vx2_rel + vy2_rel*vy2_rel);
-
-    // // 4) Target relative KE after the fix
-    // high_prec KE_rel_after = KE_rel_before - delta_E;
-    // if (KE_rel_after < 0) KE_rel_after = 0; // can't go below 0
-    // if (KE_rel_before <= 0) return;        // no relative motion to scale
-
-    // // 5) Scale factor
-    // high_prec alpha = sqrt(KE_rel_after / KE_rel_before);
-
-    // // 6) Scale the relative velocities
-    // vx1_rel *= alpha;
-    // vy1_rel *= alpha;
-    // vx2_rel *= alpha;
-    // vy2_rel *= alpha;
-
-    // // 7) Map back to lab frame
-    // p1->vx = (vxCM + vx1_rel).convert_to<double>();
-    // p1->vy = (vyCM + vy1_rel).convert_to<double>();
-    // p2->vx = (vxCM + vx2_rel).convert_to<double>();
-    // p2->vy = (vyCM + vy2_rel).convert_to<double>();
-
-    // Adjust velocities to conserve total energy after overlap resolution
-
-    //print the delta_E
-    //cout << "To compensate for Delta E: " << delta_E << endl;
-
-    // Extract masses and velocities
+    // Extract masses
     high_prec m1 = p1->m;
     high_prec m2 = p2->m;
 
-    // Compute collision normal based on updated positions
+    // Compute collision normal
     high_prec dx = p2->x - p1->x;
     high_prec dy = p2->y - p1->y;
     high_prec distance = hypot(dx, dy);
 
     if (distance == 0.0) {
-        // Cannot compute normal; skip adjustment
-        return;
+        return;  // Cannot compute normal, skip adjustment
     }
 
     high_prec nx = dx / distance;
     high_prec ny = dy / distance;
 
-    // Compute velocities along the normal
+    // Compute normal and tangential directions
+    high_prec tx = -ny;
+    high_prec ty = nx;
+
+    // Compute normal velocities
     high_prec v1n = p1->vx * nx + p1->vy * ny;
     high_prec v2n = p2->vx * nx + p2->vy * ny;
 
-    // Compute relative velocity along the normal
-    high_prec rel_vel = v2n - v1n;
+    // Compute tangential velocities
+    high_prec v1t = p1->vx * tx + p1->vy * ty;
+    high_prec v2t = p2->vx * tx + p2->vy * ty;
 
     // Compute reduced mass
     high_prec reduced_mass = (m1 * m2) / (m1 + m2);
 
-    // Compute initial kinetic energy associated with relative motion along the normal
-    high_prec KE_rel = 0.5 * reduced_mass * rel_vel * rel_vel;
+    // Compute initial kinetic energy in normal and tangential directions
+    high_prec KE_rel_n_initial = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
+    high_prec KE_rel_t_initial = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
 
-    // Compute desired kinetic energy after adjustment to conserve total energy
-    high_prec KE_rel_after = KE_rel - delta_E;
+    cout << "Available normal KE: " << KE_rel_n_initial << endl;
+    cout << "Available tangential KE: " << KE_rel_t_initial << endl;
 
-    // Ensure the new kinetic energy is non-negative
-    if (KE_rel_after < 0) {
-        KE_rel_after = 0;
-    }
+    high_prec delta_E_used = 0; // Track total energy removed
 
-    // Compute the new relative velocity magnitude
-    high_prec rel_vel_after;
-    if (KE_rel_after == 0) {
-        rel_vel_after = 0;
+    // First, remove delta_E from the normal component
+    high_prec KE_rel_n = KE_rel_n_initial;
+    if (KE_rel_n < delta_E) {
+        delta_E_used += KE_rel_n;
+        delta_E -= KE_rel_n;
+        KE_rel_n = 0;
     } else {
-        rel_vel_after = sqrt(2 * KE_rel_after / reduced_mass);
-        // Preserve the direction of the relative velocity
-        if (rel_vel < 0) {
-            rel_vel_after = -rel_vel_after;
-        }
+        KE_rel_n -= delta_E;
+        delta_E_used += delta_E;
+        delta_E = 0;
     }
 
-    // Compute change in relative velocity
-    high_prec delta_rel_vel = rel_vel_after - rel_vel;
+    // Adjust normal velocity
+    high_prec new_rel_vel_n = sqrt(std::max(high_prec(0.0), high_prec(2 * KE_rel_n / reduced_mass)));
+    if (v2n - v1n < 0) new_rel_vel_n = -new_rel_vel_n;
+    high_prec delta_rel_vel_n = new_rel_vel_n - (v2n - v1n);
 
-    // Compute impulse
-    high_prec impulse = delta_rel_vel * reduced_mass;
+    // Compute impulse and apply adjustment
+    high_prec impulse_n = delta_rel_vel_n * reduced_mass;
+    high_prec dvx1_n = (impulse_n / m1) * nx;
+    high_prec dvy1_n = (impulse_n / m1) * ny;
+    high_prec dvx2_n = (impulse_n / m2) * nx;
+    high_prec dvy2_n = (impulse_n / m2) * ny;
 
-    // Adjust velocities along the normal direction
+    p1->vx -= dvx1_n.convert_to<double>();
+    p1->vy -= dvy1_n.convert_to<double>();
+    p2->vx += dvx2_n.convert_to<double>();
+    p2->vy += dvy2_n.convert_to<double>();
 
-    //print velocities before adjustment
-    //cout << "Particle 1: " << particle_i->particle_id << ", vx: " << particle_i->vx << ", vy: " << particle_i->vy << endl;
-    //cout << "Particle 2: " << particle_j->particle_id << ", vx: " << particle_j->vx << ", vy: " << particle_j->vy << endl;
+    // If there's remaining energy to remove, take it from the tangential component
+    high_prec KE_rel_t = KE_rel_t_initial;
 
+    cout << "delta_E: " << delta_E << endl;
+    
 
-    p1->vx -= ((impulse / m1) * nx).convert_to<double>();
-    p1->vy -= ((impulse / m1) * ny).convert_to<double>();
-    p2->vx += ((impulse / m2) * nx).convert_to<double>();
-    p2->vy += ((impulse / m2) * ny).convert_to<double>();
+    if (delta_E > 0) {
+        if (KE_rel_t < delta_E) {
+            std::cout << "WARNING: Not enough tangential kinetic energy either!" << std::endl;
+            std::cout << "KE_rel_t (before) = " << KE_rel_t << std::endl;
+            std::cout << "Remaining delta_E = " << delta_E << std::endl;
+            std::cout << "Velocity components: v1t = " << v1t << ", v2t = " << v2t << std::endl;
+            std::cout << "Removing as much as possible..." << std::endl;
 
+            delta_E_used += KE_rel_t;
+            delta_E -= KE_rel_t;
+            KE_rel_t = 0;
+
+            std::cout << "Press Enter to continue..." << std::endl;
+            std::cin.get();
+        } else {
+            KE_rel_t -= delta_E;
+            delta_E_used += delta_E;
+            delta_E = 0;
+        }
+
+        // Adjust tangential velocity
+        high_prec new_rel_vel_t = sqrt(std::max(high_prec(0.0), high_prec(2 * KE_rel_t / reduced_mass)));
+        if (v2t - v1t < 0) new_rel_vel_t = -new_rel_vel_t;
+        high_prec delta_rel_vel_t = new_rel_vel_t - (v2t - v1t);
+
+        
+
+        // Compute impulse for tangential adjustment
+        high_prec impulse_t = delta_rel_vel_t * reduced_mass;
+        high_prec dvx1_t = (impulse_t / m1) * tx;
+        high_prec dvy1_t = (impulse_t / m1) * ty;
+        high_prec dvx2_t = (impulse_t / m2) * tx;
+        high_prec dvy2_t = (impulse_t / m2) * ty;
+
+        p1->vx -= dvx1_t.convert_to<double>();
+        p1->vy -= dvy1_t.convert_to<double>();
+        p2->vx += dvx2_t.convert_to<double>();
+        p2->vy += dvy2_t.convert_to<double>();
+    }
+
+    cout << "tangential KE after it is used: " << KE_rel_t << endl;
+    cout << "normal KE after it is used: " << KE_rel_n << endl;
+    cout << "delta_E after it is resolved: " << delta_E << endl;
+
+    // ===================== FINAL CHECK =====================
+    v1n = p1->vx * nx + p1->vy * ny;
+    v2n = p2->vx * nx + p2->vy * ny;
+    high_prec KE_rel_n_final = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
+
+    v1t = p1->vx * tx + p1->vy * ty;
+    v2t = p2->vx * tx + p2->vy * ty;
+    high_prec KE_rel_t_final = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
+
+    
+
+    if (delta_E > 0) {
+        std::cout << "WARNING: Energy gap not fully resolved!" << std::endl;
+        std::cout << "delta_E = " << delta_E << std::endl;
+    }
 }
+
+
 
 
 
@@ -712,6 +619,8 @@ high_prec Engine::heat_ij(high_prec E, shared_ptr<Particle> particle_i, shared_p
 
     //convert the given energy to heat
     high_prec heat = E * (particle_i->m + particle_j->m) / 2;
+
+    //cout << "Heat: " << heat << endl;
 
     //convert the heat to temperature
     high_prec temp = heat / (particle_i->m + particle_j->m);
@@ -1140,6 +1049,9 @@ void Engine::update_locations(shared_ptr<Particles> particles, shared_ptr<backed
 void Engine::run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states) {
     //this function will save the snapshots to a csv file
 
+    if (true){
+        return;
+    }
     //1. define the file name, located on Inputs\rendered_scenarios
 
     string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";

@@ -68,6 +68,17 @@ public:
     //Function to update the particles
     void update_particles(shared_ptr<Particles> particles);
 
+    //function to access margin TE errors
+    double get_margin_TE_error();
+    double get_margin_TE_error_overlap();
+    double get_margin_TE_error_collision();
+    double get_margin_TE_error_integrate();
+    double get_overlap_iters_in_step();
+    double get_margin_TE_error_overlap_ij_transl();
+    double get_margin_TE_error_overlap_ij_corrected();
+
+
+
     //Functions to resolve overlap between particles
     bool resolve_overlap(shared_ptr<Particles> particles);
     void resolve_overlap_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);

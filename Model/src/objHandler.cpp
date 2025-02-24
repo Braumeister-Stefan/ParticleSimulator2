@@ -152,6 +152,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     //cout << "vx: " << particles->particle_list[0]->vx << endl;
     //cout << "vy: " << particles->particle_list[0]->vy << endl;
 
+
     return particles;
 
 

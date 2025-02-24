@@ -1,21 +1,54 @@
 {
+  "version": 4,
   "configurations": [
     {
       "name": "windows-gcc-x64",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/ParticleSimulator2_b.exe",
+      "args": [
+        "-IC:/Users/smdw1/AppData/Local/Programs/Python/Python311/include"
+      ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:\\Users\\smdw1\\scoop\\apps\\gdb\\14.1\\bin\\gdb.exe",
+      "preLaunchTask": "C/C++: g++.exe build active file",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
       "includePath": [
         "${workspaceFolder}/**"
       ],
-      "defines": [
-        "_DEBUG",
-        "UNICODE",
-        "_UNICODE"
-      ],
-      "windowsSdkVersion": "10.0.19041.0",
       "cStandard": "${default}",
       "cppStandard": "${default}",
-      "intelliSenseMode": "windows-gcc-x64",
-      "compilerPath": "C:/Users/smdw1/scoop/apps/gcc/current/bin/gcc.exe"
+      "compilerPath": "C:/Users/smdw1/scoop/apps/gcc/current/bin/gcc.exe",
+      "intelliSenseMode": "windows-gcc-x64"
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": true,
+      "cwd": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2",
+      "program": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2/build/Debug/outDebug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:\\Users\\smdw1\\scoop\\apps\\gdb\\14.1\\bin\\gdb.exe",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
     }
-  ],
-  "version": 4
+  ]
 }

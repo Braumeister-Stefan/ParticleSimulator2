@@ -76,6 +76,17 @@ struct test_metrics_t {
     double TE_change;
     double TE_error;
     double relative_error;
+
+    //marginal errors for plotting
+    double margin_TE_error;
+    double margin_TE_error_overlap;
+    double margin_TE_error_collision;
+    double margin_TE_error_integrate;
+    int overlap_iters_in_step;
+
+    double margin_TE_error_overlap_ij_transl;
+    double margin_TE_error_overlap_ij_corrected;
+    
 };
 
 

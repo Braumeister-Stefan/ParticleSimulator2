@@ -13,7 +13,15 @@
       "externalConsole": false,
       "MIMode": "gdb",
       "miDebuggerPath": "C:\\Users\\smdw1\\scoop\\apps\\gdb\\14.1\\bin\\gdb.exe", // Updated path
+
+      // This is your build task. We'll add an "args" property so that
+      // the compiler sees the -I flag.
       "preLaunchTask": "C/C++: g++.exe build active file",
+      "args": [
+        // Add the Python include path so the compiler can find Python.h
+        "-IC:/Users/smdw1/AppData/Local/Programs/Python/Python311/include"
+      ],
+
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",

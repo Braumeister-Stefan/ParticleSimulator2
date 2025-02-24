@@ -8,6 +8,7 @@
 #include <memory>
 #include <iostream>
 #include <random>
+#include <cstdlib>
 
 //Internal libraries
 #include "Model/Model.h"
@@ -15,7 +16,6 @@
 
 //namespaces
 using namespace std;
-
 
 int main() {
 
@@ -50,6 +50,18 @@ int main() {
     //4. validate the simulation and generate metrics
 
     particle_states = model.metrics->compute_metrics(selected_scenario, particle_states);
+
+    int returnCode = system(
+        
+        R"(C:\\Users\\smdw1\\anaconda3\\python.exe C:\\Users\\smdw1\\OneDrive\\Bureaublad\\Development\\Projects\\cpp\\ParticleSimulator2\\Misc\\Energy_plots\\main.py)"
+
+    );
+
+    if (returnCode == 0) {
+        cout << "Python script executed successfully." << endl;
+    } else {
+        cout << "Python script failed to execute." << endl;
+    }
 
     //5. visualize the model results using the snapshots
     model.plotter->plot_run(selected_scenario, particle_states);
