@@ -12,6 +12,6 @@ SimpleBounce_step1,"alpha,beta",1000,GRAVITY+KINETICS,FALSE,TRUE,1,FALSE
 SimpleBounce_step1_elastic,"alpha2,beta2",1000,GRAVITY+KINETICS,FALSE,TRUE,1,FALSE
 SimpleBounce_step01_elastic,"alpha2,beta2",1000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
 SimpleBounce_step01,"alpha,beta",1000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
-SimpleBounce_step01_99elastic,"alpha3,beta3",5000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
+SimpleBounce_step01_99elastic,"alpha3,beta3",5000,GRAVITY+KINETICS,FALSE,TRUE,0.01,FALSE
 SimpleBounce_step01_9999elastic,"alpha4,beta4",1000,GRAVITY+KINETICS,FALSE,TRUE,0.1,FALSE
 Benchmark1,"F,G",10000,GRAVITY+KINETICS,FALSE,TRUE,0.005,FALSE
