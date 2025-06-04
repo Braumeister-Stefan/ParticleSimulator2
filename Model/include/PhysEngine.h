@@ -25,6 +25,9 @@ public:
     //declare static member variables
     static double dt;
 
+    //declare particle_states as a static member variable
+    shared_ptr<snapshots> particle_states;
+
 
     // Constructor
     Engine();
@@ -116,7 +119,10 @@ public:
 
     //Function to validate TE
     double calc_TE(shared_ptr<Particles> particles);
-    double calc_TE_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    high_prec calc_TE_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2, bool verbose = false);
+    high_prec calculate_kinetic_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);
+    high_prec calculate_potential_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);
+    high_prec calculate_heating_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);
     
 
     momentum calc_mom(shared_ptr<Particles> particles); 

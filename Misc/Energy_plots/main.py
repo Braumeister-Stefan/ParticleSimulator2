@@ -14,8 +14,8 @@ THRESHOLD_VALUE = 100
 ADDITIONAL_STEPS_PERCENT = 0.5
 
 redraw_plot = True
-zoom_focus_step = 6400
-zoom_window = 25
+zoom_focus_step = 50
+zoom_window = 50
 
 ZOOM_SELECTIONS = ["Error", "y=0", "TE"]
 # ========== END OF USER CONFIGURABLE PARAMETERS ==========
@@ -188,6 +188,8 @@ def plot_results(base_name, final_energy_df, stable_step_id):
                 width=500, height=400)
     x_list = list(x)
 
+
+
     # We want separate y-axis for "overlap_iters_in_step":
     p4.extra_y_ranges = {"iters": Range1d(start=0, end=10)}  # We'll adjust dynamically
     p4.add_layout(LinearAxis(y_range_name="iters", axis_label="Overlap Iters"), 'right')
@@ -343,5 +345,5 @@ def main():
     print(f"Skipped files:   {skipped_files}")
 
 if __name__ == "__main__":
-    if False:
+    if True:
         main()
