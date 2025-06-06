@@ -17,11 +17,11 @@ struct scenario {
     int scenario_id;
     string name;
     string obj_list;
-    double time;
+    high_prec time;
     string interaction_func;
     bool try_cache; //if true, check if the scenario has been run before and use the results 
     bool refresh_obj; //if true, rebuild the complex objects
-    double dt; //time step
+    high_prec dt; //time step
     bool three_d; //if false, the simulation will be in 2D
 };
 
@@ -33,22 +33,22 @@ struct scenarios {
 struct object {
     int object_id;
     string name;
-    double r; //rgb values
-    double g;
-    double b;
-    double x; //position values
-    double y;
-    double z;
-    double vx; //velocity values
-    double vy;
-    double vz;
-    double m; //mass
-    double rad; //radius of sphere
-    double rest; //restitution parameter of sphere
-    double temp; //temperature of the particle
+    high_prec r; //rgb values
+    high_prec g;
+    high_prec b;
+    high_prec x; //position values
+    high_prec y;
+    high_prec z;
+    high_prec vx; //velocity values
+    high_prec vy;
+    high_prec vz;
+    high_prec m; //mass
+    high_prec rad; //radius of sphere
+    high_prec rest; //restitution parameter of sphere
+    high_prec temp; //temperature of the particle
     string complexity = "simple"; //if the object is complex, what is its shape, e.g simple, circle, square, etc.
-    double complexity_size; //if the object is complex, what is its radius. empty for simple objects
-    double complexity_n; //how many particles make up the complex object
+    high_prec complexity_size; //if the object is complex, what is its radius. empty for simple objects
+    high_prec complexity_n; //how many particles make up the complex object
 
 };
 
@@ -60,32 +60,32 @@ struct objects {
 
 struct test_metrics_t {
     //this struct will contain the metrics of the test
-    double fps;
-    double memory;
-    double cpu;
-    double gpu;
-    double KE;
-    double PE;
-    double TE;
-    double mom_x;
-    double mom_y;
-    double mom_x_change;
-    double mom_y_change;
-    double HE;
+    high_prec fps;
+    high_prec memory;
+    high_prec cpu;
+    high_prec gpu;
+    high_prec KE;
+    high_prec PE;
+    high_prec TE;
+    high_prec mom_x;
+    high_prec mom_y;
+    high_prec mom_x_change;
+    high_prec mom_y_change;
+    high_prec HE;
 
-    double TE_change;
-    double TE_error;
-    double relative_error;
+    high_prec TE_change;
+    high_prec TE_error;
+    high_prec relative_error;
 
     //marginal errors for plotting
-    double margin_TE_error;
-    double margin_TE_error_overlap;
-    double margin_TE_error_collision;
-    double margin_TE_error_integrate;
+    high_prec margin_TE_error;
+    high_prec margin_TE_error_overlap;
+    high_prec margin_TE_error_collision;
+    high_prec margin_TE_error_integrate;
     int overlap_iters_in_step;
 
-    double margin_TE_error_overlap_ij_transl;
-    double margin_TE_error_overlap_ij_corrected;
+    high_prec margin_TE_error_overlap_ij_transl;
+    high_prec margin_TE_error_overlap_ij_corrected;
     
 };
 

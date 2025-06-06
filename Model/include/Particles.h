@@ -15,20 +15,20 @@ using high_prec = cpp_dec_float_50;
 
 struct Particle {
     int particle_id;
-    double r; //rgb values
-    double g;
-    double b;
+    high_prec r; //rgb values
+    high_prec g;
+    high_prec b;
     int rgb; //rgb code
-    double x; //position values
-    double y;
-    double z;
-    double vx; //velocity values
-    double vy;
-    double vz;
-    double m; //mass
-    double rad; //radius of sphere
-    double rest; //restitution parameter of sphere
-    double temp=0; //temperature of the particle
+    high_prec x; //position values
+    high_prec y;
+    high_prec z;
+    high_prec vx; //velocity values
+    high_prec vy;
+    high_prec vz;
+    high_prec m; //mass
+    high_prec rad; //radius of sphere
+    high_prec rest; //restitution parameter of sphere
+    high_prec temp=0; //temperature of the particle
 
 
 };

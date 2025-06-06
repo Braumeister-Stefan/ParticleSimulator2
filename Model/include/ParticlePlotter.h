@@ -30,7 +30,7 @@ public:
 
     //convert r,g,b to hex for all particles
     //functions to convert rgb values to hex code
-    int intensity_to_rgb(double r, double g, double b);
+    int intensity_to_rgb(high_prec r, high_prec g, high_prec b);
 
     //function to brighten the rgb values of the snapshots
     shared_ptr<snapshots> heat_to_rgb(shared_ptr<snapshots> snapshots);

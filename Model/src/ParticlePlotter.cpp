@@ -52,8 +52,11 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
     init_GNU(scenario);
 
-    //3. Populate the plot with the first snapshot
     plot_GNU(particle_states->snaps[0], particle_states->metrics[0]);
+
+
+
+
     fprintf(gnuplotPipe, "set label 1 'Step: 0' at screen 0.01,0.01\n");
     fflush(gnuplotPipe);
 
@@ -66,10 +69,12 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     cin.get();
 
     
-    int frame_speed = 1/ scenario->dt;
+    int frame_speed = static_cast<int>(1.0 / static_cast<double>(scenario->dt));
+    int step = static_cast<int>(1.0 / static_cast<double>(scenario->dt));
+    if (step < 1) step = 1; // Ensure at least step of 1
 
     //5. Loop through the snapshots and plot each n-th one on the plot
-    for (int i = 0; i < particle_states->snaps.size(); i += (1/scenario->dt)) {
+    for (int i = 0; i < static_cast<int>(particle_states->snaps.size()); i += step) {
         // Print progress every 10% of the simulation
         if (i % (particle_states->snaps.size() / 10) == 0) {
             cout << "Simulation " << (i * 100) / particle_states->snaps.size() << "% complete." << endl;
@@ -140,10 +145,11 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
         //set radius of the point using the rad field
 
         float point_size = static_cast<float>(particles->particle_list[i]->rad);
-
-        //plot location, radius and rgb for the particle
-        fprintf(gnuplotPipe, "%f %f %f %d\n", particles->particle_list[i]->x, particles->particle_list[i]->y, point_size, particles->particle_list[i]->rgb);
-
+             
+        //fprintf(gnuplotPipe, "%f %f %f %d\n", particles->particle_list[i]->x, particles->particle_list[i]->y, point_size, particles->particle_list[i]->rgb);
+        //note that the above line will not work if x, y are high_prec, so we assume they are float or double
+        //instead we can use the following line to convert them to float
+        fprintf(gnuplotPipe, "%f %f %f %d\n", static_cast<float>(particles->particle_list[i]->x), static_cast<float>(particles->particle_list[i]->y), point_size, particles->particle_list[i]->rgb);
     }
 
     //tell gnuplot that the data input for this snapshot has ended
@@ -153,17 +159,17 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     //print number of particles
     
-    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n", particles->particle_list.size());
-    fprintf(gnuplotPipe, "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n", metrics_t->fps);
-    fprintf(gnuplotPipe, "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n", metrics_t->KE/1000);
-    fprintf(gnuplotPipe, "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n", metrics_t->PE/1000);
-    fprintf(gnuplotPipe, "set label 6 'HE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n", metrics_t->HE/1000);
-    fprintf(gnuplotPipe, "set label 7 'TE= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n", metrics_t->TE/1000);
-    fprintf(gnuplotPipe, "set label 8 'Mom x= %f K' at screen 0.01,0.60 textcolor rgb 'white'\n", metrics_t->mom_x/1000);
-    fprintf(gnuplotPipe, "set label 9 'Mom y= %f K' at screen 0.01,0.55 textcolor rgb 'white'\n", metrics_t->mom_y/1000);
+    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n", static_cast<double>(particles->particle_list.size()));
+    fprintf(gnuplotPipe, "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n", static_cast<float>(metrics_t->fps));
+    fprintf(gnuplotPipe, "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n", static_cast<float>(metrics_t->KE/1000));
+    fprintf(gnuplotPipe, "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n", static_cast<float>(metrics_t->PE/1000));
+    fprintf(gnuplotPipe, "set label 6 'HE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n", static_cast<float>(metrics_t->HE/1000));
+    fprintf(gnuplotPipe, "set label 7 'TE= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n", static_cast<float>(metrics_t->TE/1000));
+    fprintf(gnuplotPipe, "set label 8 'Mom x= %f K' at screen 0.01,0.60 textcolor rgb 'white'\n", static_cast<float>(metrics_t->mom_x/1000));
+    fprintf(gnuplotPipe, "set label 9 'Mom y= %f K' at screen 0.01,0.55 textcolor rgb 'white'\n", static_cast<float>(metrics_t->mom_y/1000));
     //fprintf(gnuplotPipe, "set label 8 'Mom Change x= %f' at screen 0.01,0.60 textcolor rgb 'white'\n", metrics_t->mom_x_change);
     //fprintf(gnuplotPipe, "set label 9 'Mom Change y= %f' at screen 0.01,0.55 textcolor rgb 'white'\n", metrics_t->mom_y_change);
-    fprintf(gnuplotPipe, "set label 10 'Relative TE Error= %f' at screen 0.01,0.50 textcolor rgb 'white'\n", metrics_t->relative_error);
+    fprintf(gnuplotPipe, "set label 10 'Relative TE Error= %f' at screen 0.01,0.50 textcolor rgb 'white'\n", static_cast<float>(metrics_t->relative_error));
 
 
     //format by dividing by /1000 and calling it K
@@ -190,14 +196,14 @@ void Plotter::close_GNU() {
 }
 
 
-int Plotter::intensity_to_rgb(double r, double g, double b) {
+int Plotter::intensity_to_rgb(high_prec r, high_prec g, high_prec b) {
     //this function will convert the rgb values to a hex code
 
     //1. convert the intensity values to 255 base
 
-    int r255 = r * 255;
-    int g255 = g * 255;
-    int b255 = b * 255;
+    int r255 = static_cast<int>(r * 255);
+    int g255 = static_cast<int>(g * 255);
+    int b255 = static_cast<int>(b * 255);
 
     //2. combine the rgb  
 
@@ -228,18 +234,18 @@ shared_ptr<Particles> Plotter::convert_intensity_to_rgb(shared_ptr<Particles> pa
 shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots) 
 {
     // 1. Find the highest temperature of all particles in all snapshots.
-    double max_temp = 0.0;
+    high_prec max_temp = 0.0;
     for (int i = 0; i < snapshots->snaps.size(); i++) {
         for (int j = 0; j < snapshots->snaps[i]->particle_list.size(); j++) {
-            double t = snapshots->snaps[i]->particle_list[j]->temp;
+            high_prec t = snapshots->snaps[i]->particle_list[j]->temp;
             if (t > max_temp) {
                 max_temp = t;
             }
         }
     }
 
-    double min_temp = 0.0;
-    double temp_range = max_temp - min_temp;
+    high_prec min_temp = 0.0;
+    high_prec temp_range = max_temp - min_temp;
 
     // If max_temp == 0 (or < 0), there's no brightness increase to do.
     if (temp_range <= 0.0) {
@@ -251,16 +257,16 @@ shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots)
     for (int i = 0; i < snapshots->snaps.size(); i++) {
         for (int j = 0; j < snapshots->snaps[i]->particle_list.size(); j++) {
 
-            double t = snapshots->snaps[i]->particle_list[j]->temp;
-            double fraction = (t - min_temp) / temp_range;
+            high_prec t = snapshots->snaps[i]->particle_list[j]->temp;
+            high_prec fraction = (t - min_temp) / temp_range;
             // Clamp the fraction between 0 and 1
             if (fraction < 0.0) fraction = 0.0;
             if (fraction > 1.0) fraction = 1.0;
 
             // Current color
-            double &r = snapshots->snaps[i]->particle_list[j]->r;
-            double &g = snapshots->snaps[i]->particle_list[j]->g;
-            double &b = snapshots->snaps[i]->particle_list[j]->b;
+            high_prec r = snapshots->snaps[i]->particle_list[j]->r;
+            high_prec g = snapshots->snaps[i]->particle_list[j]->g;
+            high_prec b = snapshots->snaps[i]->particle_list[j]->b;
 
             // Move each channel from its current value toward 1 by 'fraction'
             r = r + (1.0 - r) * fraction;
@@ -271,6 +277,11 @@ shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots)
             if (r > 1.0) r = 1.0;
             if (g > 1.0) g = 1.0;
             if (b > 1.0) b = 1.0;
+
+            // Write back the updated values
+            snapshots->snaps[i]->particle_list[j]->r = r;
+            snapshots->snaps[i]->particle_list[j]->g = g;
+            snapshots->snaps[i]->particle_list[j]->b = b;
         }
     }
 

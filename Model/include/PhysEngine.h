@@ -23,7 +23,7 @@ class Engine {
 public:
 
     //declare static member variables
-    static double dt;
+    static high_prec dt;
 
     //declare particle_states as a static member variable
     shared_ptr<snapshots> particle_states;
@@ -40,8 +40,8 @@ public:
     //structure with momentum x,y vector
 
     struct momentum {
-        double x;
-        double y;
+        high_prec x;
+        high_prec y;
 
         // Define arithmetic operators
         momentum operator+(const momentum& other) const {
@@ -52,11 +52,11 @@ public:
             return { x - other.x, y - other.y };
         }
 
-        momentum operator*(const double& scalar) const {
+        momentum operator*(const high_prec& scalar) const {
             return { x * scalar, y * scalar };
         }
 
-        momentum operator/(const double& scalar) const {
+        momentum operator/(const high_prec& scalar) const {
             return { x / scalar, y / scalar };
         }
 
@@ -72,18 +72,18 @@ public:
     void update_particles(shared_ptr<Particles> particles);
 
     //function to access margin TE errors
-    double get_margin_TE_error();
-    double get_margin_TE_error_overlap();
-    double get_margin_TE_error_collision();
-    double get_margin_TE_error_integrate();
-    double get_overlap_iters_in_step();
-    double get_margin_TE_error_overlap_ij_transl();
-    double get_margin_TE_error_overlap_ij_corrected();
+    high_prec get_margin_TE_error();
+    high_prec get_margin_TE_error_overlap();
+    high_prec get_margin_TE_error_collision();
+    high_prec get_margin_TE_error_integrate();
+    high_prec get_overlap_iters_in_step();
+    high_prec get_margin_TE_error_overlap_ij_transl();
+    high_prec get_margin_TE_error_overlap_ij_corrected();
 
 
 
     //Functions to resolve overlap between particles
-    bool resolve_overlap(shared_ptr<Particles> particles);
+    bool resolve_overlaps(shared_ptr<Particles> particles);
     void resolve_overlap_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
     
 
@@ -101,7 +101,9 @@ public:
 
 
     void resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
-    bool check_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2, double threshold);
+
+    bool check_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    bool check_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
 
 
 
@@ -118,7 +120,7 @@ public:
     shared_ptr<snapshots> run_from_cache(shared_ptr<scenario> scenario);
 
     //Function to validate TE
-    double calc_TE(shared_ptr<Particles> particles);
+    high_prec calc_TE(shared_ptr<Particles> particles);
     high_prec calc_TE_ij(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2, bool verbose = false);
     high_prec calculate_kinetic_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);
     high_prec calculate_potential_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);

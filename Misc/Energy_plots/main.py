@@ -345,5 +345,5 @@ def main():
     print(f"Skipped files:   {skipped_files}")
 
 if __name__ == "__main__":
-    if True:
+    if False:
         main()

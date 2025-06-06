@@ -31,16 +31,16 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         particle_states->metrics.resize(particle_states->snaps.size(), make_shared<test_metrics_t>());
     }
 
-    double dt = scenario->dt;  // Time step length
-    const double TE_error_threshold = 0.01;
-    const double mom_change_threshold = 0.01;
+    high_prec dt = scenario->dt;  // Time step length
+    const high_prec TE_error_threshold = 0.01;
+    const high_prec mom_change_threshold = 0.01;
 
     for (int i = 0; i < particle_states->snaps.size(); i++) {
-        double kinetic_energy = 0.0;
-        double potential_energy = 0.0;
-        double momentum_x = 0.0;
-        double momentum_y = 0.0;
-        double heating_energy = 0.0;
+        high_prec kinetic_energy = 0.0;
+        high_prec potential_energy = 0.0;
+        high_prec momentum_x = 0.0;
+        high_prec momentum_y = 0.0;
+        high_prec heating_energy = 0.0;
 
 
         // Get the particles for the current snapshot
@@ -49,11 +49,11 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
 
         // Calculate kinetic energy,momentum and temperature for the snapshot
         for (int j = 0; j < particle_count; j++) {
-            double mass = particles->particle_list[j]->m;
-            double vx = particles->particle_list[j]->vx;
-            double vy = particles->particle_list[j]->vy;
-            double vz = particles->particle_list[j]->vz;
-            double temp = particles->particle_list[j]->temp;
+            high_prec mass = particles->particle_list[j]->m;
+            high_prec vx = particles->particle_list[j]->vx;
+            high_prec vy = particles->particle_list[j]->vy;
+            high_prec vz = particles->particle_list[j]->vz;
+            high_prec temp = particles->particle_list[j]->temp;
 
             kinetic_energy += 0.5 * mass * (vx * vx + vy * vy + vz * vz);
             momentum_x += mass * vx;
@@ -65,10 +65,10 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         // Calculate potential energy for each unique pair of particles
         for (int j = 0; j < particle_count; j++) {
             for (int k = j + 1; k < particle_count; k++) {
-                double dx = particles->particle_list[j]->x - particles->particle_list[k]->x;
-                double dy = particles->particle_list[j]->y - particles->particle_list[k]->y;
-                double dz = particles->particle_list[j]->z - particles->particle_list[k]->z;
-                double distance = sqrt(dx * dx + dy * dy + dz * dz);
+                high_prec dx = particles->particle_list[j]->x - particles->particle_list[k]->x;
+                high_prec dy = particles->particle_list[j]->y - particles->particle_list[k]->y;
+                high_prec dz = particles->particle_list[j]->z - particles->particle_list[k]->z;
+                high_prec distance = sqrt(dx * dx + dy * dy + dz * dz);
                 potential_energy += -6.674e-11 * particles->particle_list[j]->m * particles->particle_list[k]->m / distance;
             }
         }
@@ -88,17 +88,17 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
             metrics->mom_x_change = 0.0;
             metrics->mom_y_change = 0.0;
         } else {
-            double initial_TE = particle_states->metrics[0]->TE;
-            double initial_mom_x = particle_states->metrics[0]->mom_x;
-            double initial_mom_y = particle_states->metrics[0]->mom_y;
+            high_prec initial_TE = particle_states->metrics[0]->TE;
+            high_prec initial_mom_x = particle_states->metrics[0]->mom_x;
+            high_prec initial_mom_y = particle_states->metrics[0]->mom_y;
 
             metrics->TE_change = (metrics->TE - initial_TE) / initial_TE;
-            metrics->mom_x_change = (initial_mom_x != 0) ? (momentum_x - initial_mom_x) / initial_mom_x : 0.0;
-            metrics->mom_y_change = (initial_mom_y != 0) ? (momentum_y - initial_mom_y) / initial_mom_y : 0.0;
+            metrics->mom_x_change = (initial_mom_x != 0) ? (momentum_x - initial_mom_x) / initial_mom_x : high_prec(0.0);
+            metrics->mom_y_change = (initial_mom_y != 0) ? (momentum_y - initial_mom_y) / initial_mom_y : high_prec(0.0);
 
             //calculate the current TE versus the TE of the previous step. Call it margin_TE_error
-            //double prev_TE = particle_states->metrics[i - 1]->TE;
-            //double margin_TE_error = metrics->TE - prev_TE;
+            //high_prec prev_TE = particle_states->metrics[i - 1]->TE;
+            //high_prec margin_TE_error = metrics->TE - prev_TE;
             //metrics->margin_TE_error = margin_TE_error;
 
 
@@ -106,8 +106,8 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
 
         // Cumulative TE error over time
         if (i > 0) {
-            double prev_TE_error = particle_states->metrics[i - 1]->TE_error;
-            double te_error = metrics->TE - particle_states->metrics[i - 1]->TE;
+            high_prec prev_TE_error = particle_states->metrics[i - 1]->TE_error;
+            high_prec te_error = metrics->TE - particle_states->metrics[i - 1]->TE;
             metrics->TE_error = prev_TE_error + te_error;
             metrics->relative_error = metrics->TE_error / particle_states->metrics[0]->TE;
         } else {
@@ -147,9 +147,9 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
     
 
     // Calculate the rolling average by considering the last `fps_smoothing_window` frames
-    int fps_smoothing_window = 30/ dt;  // Number of frames to consider for smoothing
+    int fps_smoothing_window = static_cast<int>(30 / dt);  // Number of frames to consider for smoothing
     for (int i = 0; i < particle_states->metrics.size(); i++) {
-        double avg_fps = 0;
+        high_prec avg_fps = 0;
         int count = 0;
         
         for (int j = i; j >= 0 && j > i - fps_smoothing_window; j--) {
@@ -271,19 +271,19 @@ void Metrics::metrics_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapsho
 //             file << std::fixed << std::setprecision(15) // Set precision to 15 decimal places
 //                 << i << ","
 //                 << particle_states->snaps[i]->particle_list[j]->particle_id << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->r) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->g) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->b) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->x) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->y) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->z) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->vx) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->vy) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->vz) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->m) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->rad) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->temp) << ","
-//                 << static_cast<double>(particle_states->snaps[i]->particle_list[j]->rest) << endl;
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->r) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->g) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->b) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->x) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->y) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->z) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->vx) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->vy) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->vz) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->m) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->rad) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->temp) << ","
+//                 << static_cast<high_prec>(particle_states->snaps[i]->particle_list[j]->rest) << endl;
 //         }
 //     }
 

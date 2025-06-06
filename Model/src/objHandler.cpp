@@ -297,8 +297,8 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
     //1. retrieve complexity parameters
 
-    double circle_rad = complex_object->complexity_size;
-    int complexity_n = complex_object->complexity_n;
+    high_prec circle_rad = complex_object->complexity_size;
+    int complexity_n = static_cast<int>(complex_object->complexity_n.convert_to<double>());
     Vector2D center = { complex_object->x, complex_object->y };
 
 
@@ -348,7 +348,7 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
     remove_overlaps(particles);
 
     //set mass equal to complex_object mass divided by size of particles
-    double m_i = complex_object->m / particles->particle_list.size();
+    high_prec m_i = complex_object->m / particles->particle_list.size();
 
     for (int i = 0; i < particles->particle_list.size(); i++) {
         particles->particle_list[i]->m = m_i;
@@ -524,7 +524,7 @@ void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
 
 bool ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
     // Calculate the distance between the two particles
-    double distance = sqrt(pow(particle1->x - particle2->x, 2) +
+    high_prec distance = sqrt(pow(particle1->x - particle2->x, 2) +
                            pow(particle1->y - particle2->y, 2) +
                            pow(particle1->z - particle2->z, 2));
 
