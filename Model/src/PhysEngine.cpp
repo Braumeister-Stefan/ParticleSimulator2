@@ -130,6 +130,7 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         momentum mom_pre_update = calc_mom(particles);
 
         // Call update_particles
+        //cout << "Updating particles at step " << i + 1 << " of " << steps << endl;
         update_particles(particles);
 
         high_prec te_post_update = calc_TE(particles);
@@ -198,11 +199,11 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
 
 void Engine::update_particles(shared_ptr<Particles> particles)
-{
+{   
+    // Overlap resolution
     bool no_overlap = false;
     high_prec te_pre_overlap = calc_TE(particles);
 
-    // Overlap resolution
     for (int i = 0; i < 8; i++) {
         if (no_overlap) break;
         no_overlap = true;
@@ -346,10 +347,10 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     //the above gives the dot product of the relative velocity and the distance vector, which is the relative velocity in the direction of the distance vector
     //instead the magnitude of rel_vel can be calculated as:
     high_prec rel_vel_pre_mag = hypot(vx2_before - vx1_before, vy2_before - vy1_before) * distance_pre / hypot(x2_before - x1_before, y2_before - y1_before);
-    cout << "---" << endl;
-    cout << "pre resolve overlap: " << endl;
+    //cout << "---" << endl;
+    //cout << "pre resolve overlap: " << endl;
     
-    cout << "rel_vel_mag: " << rel_vel_pre_mag << endl;
+    //cout << "rel_vel_mag: " << rel_vel_pre_mag << endl;
 
     // Calculate initial total kinetic energy using calc_TE_ij
     high_prec TE_pre_ij = calc_TE_ij(particle_i, particle_j, true);
@@ -373,7 +374,7 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec KE_rel_n_initial = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
     high_prec KE_rel_t_initial = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
 
-    cout << "KE_rel_n_initial: " << KE_rel_n_initial << "and KE_rel_t_initial: " << KE_rel_t_initial << endl;
+    //cout << "KE_rel_n_initial: " << KE_rel_n_initial << "and KE_rel_t_initial: " << KE_rel_t_initial << endl;
 
     // Print the initial kinetic energy information in a structured way
     // std::cout << "=== Initial Kinetic Energy Information ===" << std::endl;
@@ -429,15 +430,15 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
                              (particle_j->vy - particle_i->vy) * dy_new;
 
     high_prec rel_vel_post_mag = hypot(particle_j->vx - particle_i->vx, particle_j->vy - particle_i->vy) * distance_new / hypot(dx_new, dy_new);
-    cout << "---" << endl;
-    cout << "post resolve overlap: " << endl;
+    //cout << "---" << endl;
+    //cout << "post resolve overlap: " << endl;
     
     //cout << "rel_vel_post: " << rel_vel_post << endl;
-    cout << "rel_vel_mag: " << rel_vel_post_mag << endl;
+    //cout << "rel_vel_mag: " << rel_vel_post_mag << endl;
 
 
     // Compute TE, momentum again
-    high_prec TE_post_ij = calc_TE_ij(particle_i, particle_j, true); 
+    high_prec TE_post_ij = calc_TE_ij(particle_i, particle_j, false); 
     //momentum mom_post_ij = calc_mom_ij(particle_i, particle_j);
 
     
@@ -449,7 +450,7 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec KE_rel_n_post = 0.5 * reduced_mass * (v2n_new - v1n_new) * (v2n_new - v1n_new);
     high_prec KE_rel_t_post = 0.5 * reduced_mass * (v2t_new - v1t_new) * (v2t_new - v1t_new);
 
-    cout << "KE_rel_n_post: " << KE_rel_n_post << " and KE_rel_t_post: " << KE_rel_t_post << endl;
+    //cout << "KE_rel_n_post: " << KE_rel_n_post << " and KE_rel_t_post: " << KE_rel_t_post << endl;
 
     // Print the kinetic energy right before calling resolve_energy_gap
     // std::cout << "=== Kinetic Energy Before Energy Gap Resolution ===" << std::endl;
@@ -521,7 +522,7 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     if (TE_post_ij != TE_pre_ij) {
     high_prec delta_E = TE_post_ij - TE_pre_ij;
     cout << "---" << endl;
-    cout << "delta_E to be removed: " << fixed << setprecision(10) << delta_E << defaultfloat << endl;
+    //cout << "delta_E to be removed: " << fixed << setprecision(10) << delta_E << defaultfloat << endl;
 
     //calculate the KE_post_ij based on the post-collision velocities
     high_prec KE_post_ij = 0.5 * m1 * (vx1_post * vx1_post + vy1_post * vy1_post) +
@@ -536,7 +537,7 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
         // Calculate correct scaling factor for velocity
         high_prec scale = sqrt(KE_target / KE_post_ij);
 
-        cout << "scaling factor: " << fixed << setprecision(10) << scale << defaultfloat << endl;
+        //cout << "scaling factor: " << fixed << setprecision(10) << scale << defaultfloat << endl;
 
         // Scale velocities
         particle_i->vx = vx1_post * scale;
@@ -545,10 +546,10 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
         particle_j->vy = vy2_post * scale;
 
         // Recompute energy and log
-        cout << "---" << endl;
-        cout << "post kinetic removal correction:" << endl;
+        //cout << "---" << endl;
+        //cout << "post kinetic removal correction:" << endl;
         high_prec TE_postgap_ij = calc_TE_ij(particle_i, particle_j, true);
-        cout << "TE post correction: " << TE_postgap_ij << endl;
+        //cout << "TE post correction: " << TE_postgap_ij << endl;
 
         // Overlap geometry
         high_prec dx_after = particle_j->x - particle_i->x;
@@ -556,8 +557,8 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
         high_prec distance_after = hypot(dx_after, dy_after);
         high_prec overlap_after = (particle_i->rad + particle_j->rad) - distance_after;
 
-        cout << "Distance after correction: " << distance_after << endl;
-        cout << "Overlap after correction: " << overlap_after << endl;
+        //cout << "Distance after correction: " << distance_after << endl;
+        //cout << "Overlap after correction: " << overlap_after << endl;
     }
 }
 
@@ -838,11 +839,36 @@ bool Engine::check_collission(shared_ptr<Particle> particle1, shared_ptr<Particl
     high_prec relative_velocity = hypot(particle1->vx - particle2->vx, particle1->vy - particle2->vy);
 
     //2. check if the distance+threshold is smaller than the sum of the radii of the particles
-    if (distance == (particle1->rad + particle2->rad) && (relative_velocity > 0)) {
-        cout << "Particles are colliding." << endl;
+
+    //allow for a threshold of 0.0001
+    high_prec threshold = 0.0000000001;
+
+    if (abs(distance - (particle1->rad + particle2->rad)) < threshold && relative_velocity > 0.4) {
+        //cout << "Particles are colliding." << endl;
+        //cout << "Distance: " << fixed << setprecision(10) << distance << defaultfloat << endl;
+        //cout << "Sum of radii: " << fixed << setprecision(10) << (particle1->rad + particle2->rad) << defaultfloat << endl;
+        //cout << "Relative velocity: " << fixed << setprecision(10) << relative_velocity << defaultfloat << endl;
+
+    //if (distance == (particle1->rad + particle2->rad) && (relative_velocity > 0)) {
+        //cout << "Particles are colliding." << endl;
+        //cout << "Distance: " << fixed << setprecision(10) << distance << defaultfloat << endl;
+        //cout << "Sum of radii: " << fixed << setprecision(10) << (particle1->rad + particle2->rad) << defaultfloat << endl;
+        cout << "Relative velocity at collission: " << fixed << setprecision(10) << relative_velocity << defaultfloat << endl;
+
+        cin.get();
+
+
+      
+
+
 
         return true;
     } else {
+
+        //cout << "Particles are NOT colliding." << endl;
+        //cout << "Distance: " << fixed << setprecision(10) << distance << defaultfloat << endl;
+        //cout << "Sum of radii: " << fixed << setprecision(10) << (particle1->rad + particle2->rad) << defaultfloat << endl;
+        //out << "Relative velocity: " << fixed << setprecision(10) << relative_velocity << defaultfloat << endl;
         
         return false;
     }
@@ -859,7 +885,7 @@ bool Engine::check_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> 
     
     //2. check if the distance+threshold is smaller than the sum of the radii of the particles
     if ((distance)< particle1->rad + particle2->rad ) {
-        cout << "Particles are overlapping." << endl;
+        //cout << "Particles are overlapping." << endl;
 
         return true;
     } else {
@@ -922,6 +948,11 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
         high_prec v_final = (particle1->m * v1n + particle2->m * v2n) / total_mass;
         v1n_new = v_final;
         v2n_new = v_final;
+
+        //calculate the relative velocity after the collision
+        high_prec rel_vel_after = (v2n_new - v1n_new) * normal_velocity / distance;
+        cout << "Relative velocity after inelastic collision: " << rel_vel_after << endl;
+
     } else {
         // For elastic or partially elastic collisions
         v1n_new = v1n - (1 + combined_rest) * (particle2->m / total_mass) * normal_velocity;
@@ -954,7 +985,7 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
     // Calculate the energy loss due to restitution
     high_prec energy_loss = initial_kinetic_energy - final_kinetic_energy;
     //cout << "Energy loss: " << energy_loss << endl;
-
+    cout << "Collission Energy loss: " << fixed << setprecision(10) << energy_loss << defaultfloat << endl;
     
 
 

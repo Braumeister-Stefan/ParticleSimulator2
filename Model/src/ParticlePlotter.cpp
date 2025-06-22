@@ -159,7 +159,7 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     //print number of particles
     
-    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n", static_cast<double>(particles->particle_list.size()));
+    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n", particles->particle_list.size());
     fprintf(gnuplotPipe, "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n", static_cast<float>(metrics_t->fps));
     fprintf(gnuplotPipe, "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n", static_cast<float>(metrics_t->KE/1000));
     fprintf(gnuplotPipe, "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n", static_cast<float>(metrics_t->PE/1000));
