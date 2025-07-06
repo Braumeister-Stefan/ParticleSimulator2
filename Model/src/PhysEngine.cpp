@@ -475,49 +475,6 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec vx2_post = particle_j->vx;
     high_prec vy2_post = particle_j->vy;
 
-    // if (TE_post_ij != TE_pre_ij) {
-    //     high_prec delta_E = TE_post_ij - TE_pre_ij;
-    //     cout << "---"   << endl;
-    //     cout << "delta_E to be added:" << delta_E << endl;
-
-    //     //subtract the delta_E from the heating energy
-    //     //high_prec heat_energy = heat_ij(-delta_E, particle_i, particle_j);
-
-    //     //high_prec TE_postheat_ij = calc_TE_ij(particle_i, particle_j, true);
-
-    //     //high_prec delta_E_postheat = TE_postheat_ij - TE_pre_ij;
-
-    //     //cout << "delta_E_postheat: " << delta_E_postheat << endl;
-
-    //     //an alternative to subtracting the delta_E from the heating energy is to resolve the energy gap through the following steps:
-    //     //1) calculate the magnitudes of vx,vy for both particles.
-    //     //2) set delta_E equal to the gap_magnitude of the system
-    //     //3) resolve the energy gap by dividing the the vx,vy of both particles by the ratio of the delta_E and the gap_magnitude
-        
-    //     //1) calc mags
-    //     high_prec kine_mag1 = hypot(vx1_post, vy1_post);
-    //     high_prec kine_mag2 = hypot(vx2_post, vy2_post);
-    //     //2) calculate the total energy of the system
-    //     high_prec total_energy = calc_TE_ij(particle_i, particle_j, false);
-    //     //cout << "total_energy: " << total_energy << endl;
-    //     //calculate the gap in % of the total energy
-    //     high_prec gap_magnitude = (total_energy - delta_E) / total_energy;
-    //     //cout << "gap_magnitude: " << gap_magnitude << endl;
-    //     //3) resolve the energy gap
-
-    //     particle_i->vx = (vx1_post / gap_magnitude).convert_to<double>();
-    //     particle_i->vy = (vy1_post / gap_magnitude).convert_to<double>();
-    //     particle_j->vx = (vx2_post / gap_magnitude).convert_to<double>();
-    //     particle_j->vy = (vy2_post / gap_magnitude).convert_to<double>();
-
-    //     //calculate the new total energy of the system
-    //     cout << "---" << endl;
-    //     cout << "post kinetic removal correction: " << endl;
-    //     high_prec TE_postgap_ij = calc_TE_ij(particle_i, particle_j, true);
-
-
-
-    // }
 
     if (TE_post_ij != TE_pre_ij) {
     high_prec delta_E = TE_post_ij - TE_pre_ij;
@@ -548,7 +505,7 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
         // Recompute energy and log
         //cout << "---" << endl;
         //cout << "post kinetic removal correction:" << endl;
-        high_prec TE_postgap_ij = calc_TE_ij(particle_i, particle_j, true);
+        high_prec TE_postgap_ij = calc_TE_ij(particle_i, particle_j, false);
         //cout << "TE post correction: " << TE_postgap_ij << endl;
 
         // Overlap geometry
@@ -614,163 +571,25 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
 
     // }
 
+    //calculate the relative velocity in the normal direction. recalculate based on the post-collision positions and velocities
+    high_prec distance_post2 = hypot(particle_j->x - particle_i->x, particle_j->y - particle_i->y);
+    high_prec nx_post = (particle_j->x - particle_i->x) / distance_post2;
+    high_prec ny_post = (particle_j->y - particle_i->y) / distance_post2;
+
+    high_prec rel_vel_n = (particle_j->vx - particle_i->vx) * nx_post + 
+                          (particle_j->vy - particle_i->vy) * ny_post;
+
+
+    // cout << "--------Post overlap correction breakdown----------" << endl;
+    // cout << "Particle i ID: " << particle_i->particle_id << endl;
+    // cout << "Particle j ID: " << particle_j->particle_id << endl;
+
+    // cout << "nx (post overlap correction): " << nx_post << endl;
+    // cout << "ny (post overlap correction): " << ny_post << endl;
+
+    cout << "Rel_vel_normal (post overlap correction): " << rel_vel_n << endl;
+
 }
-
-
-
-
-void Engine::resolve_energy_gap(std::shared_ptr<Particle> p1,
-    std::shared_ptr<Particle> p2,
-    boost::multiprecision::cpp_dec_float_50 delta_E)
-{
-    using high_prec = boost::multiprecision::cpp_dec_float_50;
-
-    //add to counter of energy gap corrections
-    energy_gap_corrections++;
-
-    // Extract masses
-    high_prec m1 = p1->m;
-    high_prec m2 = p2->m;
-
-    // Compute collision normal
-    high_prec dx = p2->x - p1->x;
-    high_prec dy = p2->y - p1->y;
-    high_prec distance = hypot(dx, dy);
-
-    if (distance == 0.0) {
-        return;  // Cannot compute normal, skip adjustment
-    }
-
-    high_prec nx = dx / distance;
-    high_prec ny = dy / distance;
-
-    // Compute normal and tangential directions
-    high_prec tx = -ny;
-    high_prec ty = nx;
-
-    // Compute normal velocities
-    high_prec v1n = p1->vx * nx + p1->vy * ny;
-    high_prec v2n = p2->vx * nx + p2->vy * ny;
-
-    // Compute tangential velocities
-    high_prec v1t = p1->vx * tx + p1->vy * ty;
-    high_prec v2t = p2->vx * tx + p2->vy * ty;
-
-    // Compute reduced mass
-    high_prec reduced_mass = (m1 * m2) / (m1 + m2);
-
-    // Compute initial kinetic energy in normal and tangential directions
-    high_prec KE_rel_n_initial = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
-    high_prec KE_rel_t_initial = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
-
-    //cout << "Available normal KE: " << KE_rel_n_initial << endl;
-    //cout << "Available tangential KE: " << KE_rel_t_initial << endl;
-
-    high_prec delta_E_used = 0; // Track total energy removed
-
-    // First, remove delta_E from the normal component
-    high_prec KE_rel_n = KE_rel_n_initial;
-    if (KE_rel_n < delta_E) {
-        delta_E_used += KE_rel_n;
-        delta_E -= KE_rel_n;
-        KE_rel_n = 0;
-    } else {
-        KE_rel_n -= delta_E;
-        delta_E_used += delta_E;
-        delta_E = 0;
-    }
-
-    // Adjust normal velocity
-    high_prec new_rel_vel_n = sqrt(std::max(high_prec(0.0), high_prec(2 * KE_rel_n / reduced_mass)));
-    if (v2n - v1n < 0) new_rel_vel_n = -new_rel_vel_n;
-    high_prec delta_rel_vel_n = new_rel_vel_n - (v2n - v1n);
-
-    // Compute impulse and apply adjustment
-    high_prec impulse_n = delta_rel_vel_n * reduced_mass;
-    high_prec dvx1_n = (impulse_n / m1) * nx;
-    high_prec dvy1_n = (impulse_n / m1) * ny;
-    high_prec dvx2_n = (impulse_n / m2) * nx;
-    high_prec dvy2_n = (impulse_n / m2) * ny;
-
-    p1->vx -= dvx1_n;
-    p1->vy -= dvy1_n;
-    p2->vx += dvx2_n;
-    p2->vy += dvy2_n;
-
-    // If there's remaining energy to remove, take it from the tangential component
-    high_prec KE_rel_t = KE_rel_t_initial;
-
-    cout << "delta_E: " << delta_E << endl;
-    
-
-    if (delta_E > 0) {
-        if (KE_rel_t < delta_E) {
-            // std::cout << "WARNING: Not enough tangential kinetic energy either!" << std::endl;
-            // std::cout << "KE_rel_t (before) = " << KE_rel_t << std::endl;
-            // std::cout << "Remaining delta_E = " << delta_E << std::endl;
-            // std::cout << "Velocity components: v1t = " << v1t << ", v2t = " << v2t << std::endl;
-            // std::cout << "Removing as much as possible..." << std::endl;
-
-            delta_E_used += KE_rel_t;
-            delta_E -= KE_rel_t;
-            KE_rel_t = 0;
-
-            // std::cout << "Press Enter to continue..." << std::endl;
-            // std::cin.get();
-        } else {
-            KE_rel_t -= delta_E;
-            delta_E_used += delta_E;
-            delta_E = 0;
-        }
-
-        // Adjust tangential velocity
-        high_prec new_rel_vel_t = sqrt(max(high_prec(0.0), high_prec(2 * KE_rel_t / reduced_mass)));
-        if (v2t - v1t < 0) new_rel_vel_t = -new_rel_vel_t;
-        high_prec delta_rel_vel_t = new_rel_vel_t - (v2t - v1t);
-
-        
-
-        // Compute impulse for tangential adjustment
-        high_prec impulse_t = delta_rel_vel_t * reduced_mass;
-        high_prec dvx1_t = (impulse_t / m1) * tx;
-        high_prec dvy1_t = (impulse_t / m1) * ty;
-        high_prec dvx2_t = (impulse_t / m2) * tx;
-        high_prec dvy2_t = (impulse_t / m2) * ty;
-
-        p1->vx -= dvx1_t;
-        p1->vy -= dvy1_t;
-        p2->vx += dvx2_t;
-        p2->vy += dvy2_t;
-    }
-
-    //cout << "tangential KE after it is used: " << KE_rel_t << endl;
-    //cout << "normal KE after it is used: " << KE_rel_n << endl;
-    //cout << "delta_E after it is resolved: " << delta_E << endl;
-
-    // ===================== FINAL CHECK =====================
-    v1n = p1->vx * nx + p1->vy * ny;
-    v2n = p2->vx * nx + p2->vy * ny;
-    high_prec KE_rel_n_final = 0.5 * reduced_mass * (v2n - v1n) * (v2n - v1n);
-
-    v1t = p1->vx * tx + p1->vy * ty;
-    v2t = p2->vx * tx + p2->vy * ty;
-    high_prec KE_rel_t_final = 0.5 * reduced_mass * (v2t - v1t) * (v2t - v1t);
-
-    
-
-    if (delta_E > 0) {
-        //\std::cout << "WARNING: Energy gap not fully resolved!" << std::endl;
-        //std::cout << "delta_E = " << delta_E << std::endl;
-
-        //add to counter
-        energy_gap_corrections_incomplete++;
-
-    }
-}
-
-
-
-
 
 
 high_prec Engine::heat_ij(high_prec E, shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j){
@@ -803,8 +622,9 @@ void Engine::resolve_collisions(shared_ptr<Particles> particles) {
 
             bool collission = check_collission(particles->particle_list[i], particles->particle_list[j]);
             
-            
-            
+            //output distance
+
+
 
             if (collission) {
                 //resolve the collission
@@ -832,18 +652,54 @@ bool Engine::check_collission(shared_ptr<Particle> particle1, shared_ptr<Particl
 
 
     //1. calculate the distance between the particles
-    high_prec distance = hypot(particle1->x - particle2->x, particle1->y - particle2->y);
+    high_prec distance = hypot(particle2->x - particle1->x, particle2->y - particle1->y);
     
     
     //calculate relative velocity 
-    high_prec relative_velocity = hypot(particle1->vx - particle2->vx, particle1->vy - particle2->vy);
+    high_prec relative_velocity = hypot(particle2->vx - particle1->vx, particle2->vy - particle1->vy);
+    // Calculate rel_velocity in the normal direction
+
+    high_prec dx = particle2->x - particle1->x;
+    high_prec dy = particle2->y - particle1->y;
+    high_prec distance_vector = hypot(dx, dy);
+
+    //collision normal 
+    high_prec nx = dx / distance_vector;
+    high_prec ny = dy / distance_vector;
+
+    //project relative velocity onto the normal vector
+    high_prec rel_vel_normal = (particle2->vx - particle1->vx) * nx + (particle2->vy - particle1->vy) * ny;
+
+    //cout << "rel_vel_normal (collision check): " << rel_vel_normal << endl;
+
+
+
+    //calculate the direction of the relative velocity. If away from each other, then the direction is positive, if towards each other, then the direction is negative
+    high_prec direction = (particle1->x - particle2->x) * (particle1->vx - particle2->vx) + 
+                        (particle1->y - particle2->y) * (particle1->vy - particle2->vy);
+
+    //if (direction < 0) {
+        //cout << "Relative velocity is towards each other." << endl;
+    //} else if (direction > 0) {
+        //cout << "Relative velocity is away from each other." << endl;
+    //}
+
+
+    //cout << "Relative velocity (colission check - note this is magnitude): " << fixed << setprecision(10) << relative_velocity << defaultfloat << endl;
+    //cout << "Distance (collission check): " << fixed << setprecision(10) << distance << defaultfloat << endl;
+
 
     //2. check if the distance+threshold is smaller than the sum of the radii of the particles
 
     //allow for a threshold of 0.0001
     high_prec threshold = 0.0000000001;
 
-    if (abs(distance - (particle1->rad + particle2->rad)) < threshold && relative_velocity > 0.4) {
+    if (abs(distance - (particle1->rad + particle2->rad)) < threshold) {
+        if (rel_vel_normal < 0) {
+
+
+            return true; 
+        }
         //cout << "Particles are colliding." << endl;
         //cout << "Distance: " << fixed << setprecision(10) << distance << defaultfloat << endl;
         //cout << "Sum of radii: " << fixed << setprecision(10) << (particle1->rad + particle2->rad) << defaultfloat << endl;
@@ -853,16 +709,16 @@ bool Engine::check_collission(shared_ptr<Particle> particle1, shared_ptr<Particl
         //cout << "Particles are colliding." << endl;
         //cout << "Distance: " << fixed << setprecision(10) << distance << defaultfloat << endl;
         //cout << "Sum of radii: " << fixed << setprecision(10) << (particle1->rad + particle2->rad) << defaultfloat << endl;
-        cout << "Relative velocity at collission: " << fixed << setprecision(10) << relative_velocity << defaultfloat << endl;
+        //cout << "Relative velocity at collission: " << fixed << setprecision(10) << relative_velocity << defaultfloat << endl;
 
-        cin.get();
+        //cin.get();
 
 
       
 
 
 
-        return true;
+        return false;
     } else {
 
         //cout << "Particles are NOT colliding." << endl;
@@ -943,15 +799,40 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
     high_prec v1n_new = 0;
     high_prec v2n_new = 0;
 
+    //cout << "Combined restitution: " << combined_rest << endl;
+
+    
+
     if (combined_rest == 0) {
+
+        
+        //calculate rel velocities in x and y
+
+        high_prec rel_vel_x = (particle2->vx - particle1->vx);
+        high_prec rel_vel_y = (particle2->vy - particle1->vy);
+
+        //recalculate the normal
+        high_prec distance_pre_collission = hypot(particle2->x - particle1->x, particle2->y - particle1->y);
+        high_prec normal_x = (particle2->x - particle1->x) / distance_pre_collission;
+        high_prec normal_y = (particle2->y - particle1->y) / distance_pre_collission;
+        //calculate the relative velocity in the normal direction
+        high_prec rel_vel_n_pre = rel_vel_x * normal_x + rel_vel_y * normal_y;
+
+        cout << "rel_vel_normal (pre collission resolve) " << rel_vel_n_pre << endl;
+
+
         // Calculate common velocity after collision (conservation of momentum)
         high_prec v_final = (particle1->m * v1n + particle2->m * v2n) / total_mass;
         v1n_new = v_final;
         v2n_new = v_final;
 
-        //calculate the relative velocity after the collision
-        high_prec rel_vel_after = (v2n_new - v1n_new) * normal_velocity / distance;
-        cout << "Relative velocity after inelastic collision: " << rel_vel_after << endl;
+       
+        
+        //cout << "Rel vel x after inelastic collision: " << rel_vel_x << endl;
+        //cout << "Rel vel y after inelastic collision: " << rel_vel_y << endl;
+
+        //calculate the relative velocity in the normal direction
+        
 
     } else {
         // For elastic or partially elastic collisions
@@ -985,7 +866,7 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
     // Calculate the energy loss due to restitution
     high_prec energy_loss = initial_kinetic_energy - final_kinetic_energy;
     //cout << "Energy loss: " << energy_loss << endl;
-    cout << "Collission Energy loss: " << fixed << setprecision(10) << energy_loss << defaultfloat << endl;
+    //cout << "Collission Energy loss: " << fixed << setprecision(10) << energy_loss << defaultfloat << endl;
     
 
 
@@ -1005,6 +886,19 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
 
     //print the TE before and after the collision
     //cout << "Collision TE error: " << TE_post - TE_pre << endl;
+
+    //calculate all inputs needed for calculating the rel_vel_normal
+    high_prec dx_post = particle2->x - particle1->x;
+    high_prec dy_post = particle2->y - particle1->y;
+    high_prec distance_post = hypot(dx_post, dy_post);
+    high_prec nx_post = dx_post / distance_post;
+    high_prec ny_post = dy_post / distance_post;
+    high_prec rel_vel_x_post = particle2->vx - particle1->vx;
+    high_prec rel_vel_y_post = particle2->vy - particle1->vy;
+    //calculate the relative velocity in the normal direction
+    high_prec rel_vel_n_post = rel_vel_x_post * nx_post + rel_vel_y_post * ny_post;
+
+    cout << "rel_vel_normal (post collission resolve) " << rel_vel_n_post << endl;
 }
 
 
@@ -1014,23 +908,45 @@ void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {//abandoned
 
     // Define a small value to avoid division by zero
 
-    high_prec epsilon = 0.0000001;
+    high_prec epsilon = 0.0000000;
 
     // Loop through the particles
     for (int i = 0; i < particles->particle_list.size(); i++) {
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
+
+
+            ///GRAVINHIB ATTEMPT 1///
+
             // Skip self-interaction
             if (i == j) continue;
+            // Skip additionally, if the particles are AND(zero relative velocity, and their distance is the same as the sum of their radii)
+            //1) make a variable to check if the particles are at rest,relative to each other
+            high_prec rel_vel_x = particles->particle_list[j]->vx - particles->particle_list[i]->vx;
+            high_prec rel_vel_y = particles->particle_list[j]->vy - particles->particle_list[i]->vy;
+            high_prec rel_vel = hypot(rel_vel_x, rel_vel_y);
+            //2) make a variable to check if the particles touching, e.g. their distance is the same as the sum of their radii
+            high_prec distance = hypot(particles->particle_list[j]->x - particles->particle_list[i]->x,
+                                       particles->particle_list[j]->y - particles->particle_list[i]->y);
+
+            //2) store these particles in 2 boolean variables, make a third that is the AND condition of the first two
+            bool at_rest = (abs(rel_vel_x) < epsilon && abs(particles->particle_list[j]->vy - particles->particle_list[i]->vy) < epsilon);
+            bool touching = (abs(distance - (particles->particle_list[i]->rad + particles->particle_list[j]->rad)) < epsilon);
+            bool should_skip = at_rest && touching;
+
+            //3) if should_skip is true, then skip the iteration
+            if (should_skip){
+                cout << " zero relative velocity and touching ->Skipping interaction"<< endl;
+                continue;
+            }
+            
+
+            ///GRAVINHIB ATTEMPT 1///        
+
 
             //calculate TE before the update
             //high_prec TE_pre = calc_TE_ij(particles->particle_list[i], particles->particle_list[j]);
             
-
-            // Calculate the distance between particles i and j
-            high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
-            high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
-            high_prec distance = hypot(dx, dy);
-
+     
             if (distance < epsilon) {
                 
                 distance = epsilon;
@@ -1040,6 +956,8 @@ void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {//abandoned
             high_prec force = G * particles->particle_list[i]->m * particles->particle_list[j]->m / (distance * distance);
 
             // Calculate the components of the force
+            high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+            high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
             high_prec fx = force * (dx / distance);
             high_prec fy = force * (dy / distance);
 
@@ -1091,7 +1009,7 @@ void Engine::resolve_gravity_euler(shared_ptr<Particles> particles) {//abandoned
 
 void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
     // This function resolves the gravitational attraction between particles using the full Velocity Verlet integration scheme
-    high_prec epsilon = 0.001; // To avoid division by zero
+    high_prec epsilon = 0.000000001; 
     int n = particles->particle_list.size();
 
     high_prec TE_pre = calc_TE(particles); //calc total energy before the update
@@ -1100,18 +1018,82 @@ void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
     // Step 1: Initialize net forces for all particles
     vector<Vector2D> net_force(n, {0.0, 0.0});
 
-
+    bool debug = false; // Set to true for detailed output
     
     // Step 2: Calculate and accumulate gravitational forces for all pairs
     for (int i = 0; i < n; i++) {
         for (int j = i + 1; j < n; j++) {
+
+            //Skipping functions
+            // Skip self-interaction
+            if (i == j) continue;
+            // Skip additionally, if the particles are AND(zero relative velocity, and their distance is the same as the sum of their radii)
+            //1) make a variable to check if the particles are at rest,relative to each other
+            high_prec rel_vel_x = particles->particle_list[j]->vx - particles->particle_list[i]->vx;
+            high_prec rel_vel_y = particles->particle_list[j]->vy - particles->particle_list[i]->vy;
+            high_prec rel_vel = hypot(rel_vel_x, rel_vel_y);
+            //2) make a variable to check if the particles touching, e.g. their distance
+            high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
+            high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+            high_prec distance = hypot(dx, dy);
+            
+
+            //cout << "at_rest, breakdown." << endl;
+            ///cout << "rel_vel_x: " << rel_vel_x << endl;
+            //cout << "rel_vel_y: " << rel_vel_y << endl;
+
+            //the below decomposes relative velocity into normal and tangential components and then outputs them
+
+            high_prec rel_vel_n = (rel_vel_x * dx + rel_vel_y * dy) / distance; //normal component
+            high_prec rel_vel_t = hypot(rel_vel_x, rel_vel_y) - rel_vel_n; //tangential component
+
+            //increase precision of output
+            cout << fixed << setprecision(10);
+            cout << "rel_vel_normal (pre-grav): " << rel_vel_n << endl;
+            //cout << "rel_vel_t: " << rel_vel_t << endl;
+            
+            //create a bool that is true if the particles have a normal relative velocity smaller than epsilon
+            bool at_rest = (rel_vel_n < epsilon);
+            //cout << "at_rest: " << at_rest << endl;
+
+
+
+
+
+            bool touching = (abs(distance - (particles->particle_list[i]->rad + particles->particle_list[j]->rad)) < epsilon);
+            bool should_skip = at_rest && touching;
+
+            if (touching) {
+                //cout << "Particles are touching." << endl;
+            }
+
+            //3) if should_skip is true, then skip the iteration
+            if (should_skip){
+                cout << " zero relative velocity and touching ->Skipping interaction 1/2"<< endl;
+
+                cout << "breakdown of touching 1/2" << endl;
+                // increase precision of output
+                //cout << fixed << setprecision(10);
+                cout << "dx: " << dx << endl;
+                cout << "dy: " << dy << endl;
+                cout << "distance: " << distance << endl;
+                //cout << "sum of radii: " << particles->particle_list[i]->rad + particles->particle_list[j]->rad << endl;
+                //cout << "epsilon: " << epsilon << endl;
+                cout << defaultfloat << endl;
+
+                debug = true;
+
+
+                //continue;
+            }
+
             
             // Calculate distance components between particles i and j
-            high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
-            high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
-            high_prec distance = hypot(dx, dy);
+            //high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
+            //high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
+            //high_prec distance = hypot(dx, dy);
             //if (distance < epsilon) distance = epsilon;
-            distance = sqrt(distance*distance + epsilon*epsilon);
+            //distance = sqrt(distance*distance + epsilon*epsilon);
 
             // Calculate gravitational force magnitude
             high_prec force = G * particles->particle_list[i]->m * particles->particle_list[j]->m / (distance * distance);
@@ -1133,14 +1115,173 @@ void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
         high_prec dt_i = dt * 1;
         particles->particle_list[i]->vx += 0.5 * (net_force[i].x / particles->particle_list[i]->m) * dt_i;
         particles->particle_list[i]->vy += 0.5 * (net_force[i].y / particles->particle_list[i]->m) * dt_i;
+
+                
     }
+    //calculate dx, dy
+    high_prec dx3 = particles->particle_list[1]->x - particles->particle_list[0]->x;
+    high_prec dy3 = particles->particle_list[1]->y - particles->particle_list[0]->y;
+
+    //increase precision of output
+    cout << fixed << setprecision(10);
+
+    cout << "After step 3, first half-step, dx: " << dx3 << endl;
+    cout << "After step 3, first half-step, dy: " << dy3 << endl;
+    
 
     // Step 4: Update positions using the updated velocities
-    for (int i = 0; i < n; i++) {
-        high_prec dt_i = dt * 1;
-        particles->particle_list[i]->x += particles->particle_list[i]->vx * dt_i;
-        particles->particle_list[i]->y += particles->particle_list[i]->vy * dt_i;
+
+    //assume two particles in universe. check if they are touching
+
+    cout << "Before step 4, dx: " << dx3 << endl;
+    cout << "Before step 4, dy: " << dy3 << endl;
+
+    cout << "distance before step 4: " << hypot(dx3, dy3) << endl;
+
+    bool exactly_touching_pre4 = (abs(hypot(dx3, dy3) - (particles->particle_list[0]->rad + particles->particle_list[1]->rad)) < epsilon);
+    cout << "exactly touching? " << (exactly_touching_pre4) << endl;
+
+    //decompose velocity into normal and tangential components
+    high_prec rel_vel_x = particles->particle_list[1]->vx - particles->particle_list[0]->vx;
+    high_prec rel_vel_y = particles->particle_list[1]->vy - particles->particle_list[0]->vy;
+    high_prec rel_vel = hypot(rel_vel_x, rel_vel_y);
+    // Decompose relative velocity into normal component
+    high_prec dx = particles->particle_list[1]->x - particles->particle_list[0]->x;
+    high_prec dy = particles->particle_list[1]->y - particles->particle_list[0]->y;
+    high_prec distance = hypot(dx, dy);
+    high_prec rel_vel_n = (rel_vel_x * dx + rel_vel_y * dy) / distance; // normal component
+    high_prec rel_vel_t = rel_vel - rel_vel_n; // tangential component
+    cout << "rel_vel_normal (pre-step 4): " << rel_vel_n << endl;
+    cout << "rel_vel_tangential (pre-step 4): " << rel_vel_t << endl;
+
+    //first, initiate a debug_particles vector to store the alternatively calculated positions.
+    vector<shared_ptr<Particle>> debug_particles;
+    //copy the contents of particles->particle_list to debug_particles
+    for (const auto& particle : particles->particle_list) {
+        debug_particles.push_back(make_shared<Particle>(*particle));
     }
+
+
+
+    for (int i = 0; i < n; i++) {
+         high_prec dt_i = dt;
+
+    
+         particles->particle_list[i]->x += particles->particle_list[i]->vx * dt_i;
+         particles->particle_list[i]->y += particles->particle_list[i]->vy * dt_i;
+
+        
+    
+
+
+    }
+
+    
+
+    //an alternative way to update positions, assuming only two particles in universe is to decompose the velocity into normal and tangential components, then update the positions based on the normal component and the tangential component.
+
+    
+    high_prec nx = dx / distance;
+    high_prec ny = dy / distance;
+
+    // tangent = normal rotated +90°
+    high_prec tx = -ny;
+    high_prec ty =  nx;
+
+    // particle 0
+    high_prec vx0 = debug_particles[0]->vx; // use debug_particles for alternative calculation
+    high_prec vy0 = debug_particles[0]->vy;
+    
+    high_prec v0n = vx0*nx + vy0*ny;   // normal magnitude
+    high_prec v0t = vx0*tx + vy0*ty;   // tangential magnitude
+
+    // rebuild world‑space velocity
+    high_prec v0x = v0n*nx + v0t*tx;
+    high_prec v0y = v0n*ny + v0t*ty;
+
+    // advance position
+    debug_particles[0]->x += v0x * dt;
+    debug_particles[0]->y += v0y * dt;
+
+    // particle 1 (same pattern)
+    high_prec vx1 = debug_particles[1]->vx; // use debug_particles for alternative calculation
+    high_prec vy1 = debug_particles[1]->vy;
+    high_prec v1n = vx1*nx + vy1*ny;
+    high_prec v1t = vx1*tx + vy1*ty;
+    high_prec v1x = v1n*nx + v1t*tx;
+    high_prec v1y = v1n*ny + v1t*ty;
+
+    // advance position
+    debug_particles[1]->x += v1x * dt;
+    debug_particles[1]->y += v1y * dt;
+
+    //calculate debug_rel_vel_normal and debug_rel_vel_tangential
+    high_prec debug_rel_vel_x = debug_particles[1]->vx - debug_particles[0]->vx;
+    high_prec debug_rel_vel_y = debug_particles[1]->vy - debug_particles[0]->vy;
+    high_prec debug_rel_vel = hypot(debug_rel_vel_x, debug_rel_vel_y);
+    // Decompose relative velocity into normal component
+    high_prec debug_dx = debug_particles[1]->x - debug_particles[0]->x;
+    high_prec debug_dy = debug_particles[1]->y - debug_particles[0]->y;
+    high_prec debug_distance = hypot(debug_dx, debug_dy);   
+    high_prec debug_rel_vel_n = (debug_rel_vel_x * debug_dx + debug_rel_vel_y * debug_dy) / debug_distance; // normal component
+    high_prec debug_rel_vel_t = debug_rel_vel - debug_rel_vel_n; // tangential component
+
+
+
+  
+
+
+    
+
+
+
+
+    //calculate dx, dy
+    high_prec dx4 = particles->particle_list[1]->x - particles->particle_list[0]->x;
+    high_prec dy4 = particles->particle_list[1]->y - particles->particle_list[0]->y;
+    //cout << "After step 4, dx: " << dx4 << endl;
+    //cout << "After step 4, dy: " << dy4 << endl;
+    //reset precision
+    cout << defaultfloat << endl;
+
+
+
+    //assume two particles in universe. check if they are touching
+    cout << "distance after step 4: " << hypot(dx4, dy4) << endl;
+    bool exactly_touching_post4 = (abs(hypot(dx4, dy4) - (particles->particle_list[0]->rad + particles->particle_list[1]->rad)) < epsilon);
+    cout << "exactly touching? " << (exactly_touching_post4) << endl;
+    //decompose velocity into normal and tangential components
+    rel_vel_x = particles->particle_list[1]->vx - particles->particle_list[0]->vx;
+    rel_vel_y = particles->particle_list[1]->vy - particles->particle_list[0]->vy;
+    rel_vel = hypot(rel_vel_x, rel_vel_y);
+    // Decompose relative velocity into normal component
+    dx = particles->particle_list[1]->x - particles->particle_list[0]->x;
+    dy = particles->particle_list[1]->y - particles->particle_list[0]->y;
+    distance = hypot(dx, dy);
+    rel_vel_n = (rel_vel_x * dx + rel_vel_y * dy) / distance; // normal component
+    rel_vel_t = rel_vel - rel_vel_n; // tangential component
+    
+
+    cout << "---METHODS ARE EQUIVALENT?." << endl;
+    
+    cout << "After step 4, the current implementation positions:" << endl;
+    cout << "normal relative velocity after step 4: " << rel_vel_n << endl;
+    cout << "tangential relative velocity after step 4: " << rel_vel_t << endl;
+    cout << "Particle 0: (" << particles->particle_list[0]->x << ", " << particles->particle_list[0]->y << ")" << endl;
+    cout << "Particle 1: (" << particles->particle_list[1]->x << ", " << particles->particle_list[1]->y << ")" << endl;
+
+    cout << "After step 4, the alternative implementation positions:" << endl;
+    cout << "normal relative velocity after alternative step 4: " << debug_rel_vel_n << endl;
+    cout << "tangential relative velocity after alternative step 4: " << debug_rel_vel_t << endl;
+
+    cout << "Particle 0: (" << debug_particles[0]->x << ", " << debug_particles[0]->y << ")" << endl;
+    cout << "Particle 1: (" << debug_particles[1]->x << ", "<< debug_particles[1]->y << ")" << endl;
+
+    
+
+    cout << "---" << endl;
+
+
 
 
     // Step 5: Recalculate gravitational forces for the updated positions (second half-step)
@@ -1151,6 +1292,47 @@ void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
             high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
             high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
             high_prec distance = hypot(dx, dy);
+
+            // Skip if particles are at rest and touching
+            high_prec rel_vel_x = particles->particle_list[j]->vx - particles->particle_list[i]->vx;
+            high_prec rel_vel_y = particles->particle_list[j]->vy - particles->particle_list[i]->vy;
+            high_prec rel_vel = hypot(rel_vel_x, rel_vel_y);
+            // Decompose relative velocity into normal component
+            high_prec rel_vel_n = (rel_vel_x * dx + rel_vel_y * dy) / distance; // normal component
+
+            
+
+            bool at_rest = (rel_vel_n < epsilon);
+            bool touching = (abs(distance - (particles->particle_list[i]->rad + particles->particle_list[j]->rad)) < epsilon);
+            bool should_skip = at_rest && touching;
+            if (should_skip) {
+                cout << " zero relative velocity and touching ->Skipping interaction 2/2"<< endl;
+                //continue;
+            } else {
+
+                
+
+                cout << "breakdown of touching 2/2" << endl;
+                // increase precision of output
+                cout << fixed << setprecision(10);
+                cout << "dx: " << dx << endl;
+                cout << "dy: " << dy << endl;
+                cout << "distance: " << distance << endl;
+                cout << "sum of radii: " << particles->particle_list[i]->rad + particles->particle_list[j]->rad << endl;
+                cout << "epsilon: " << epsilon << endl;
+                cout << defaultfloat << endl;
+
+                if (debug) {
+                    cout << "---" << endl;
+                }
+                
+            }
+            
+
+
+
+
+
             if (distance < epsilon) distance = epsilon;
 
             // Recalculate gravitational force magnitude
@@ -1173,7 +1355,23 @@ void Engine::resolve_gravity_verlet(shared_ptr<Particles> particles) {
         high_prec dt_i = dt * 1;
         particles->particle_list[i]->vx += 0.5 * (net_force[i].x / particles->particle_list[i]->m) * dt_i;
         particles->particle_list[i]->vy += 0.5 * (net_force[i].y / particles->particle_list[i]->m) * dt_i;
+
+
     }
+
+    //calculate post_grav rel_vel_n. assume only two particles in universe
+    high_prec dx_post = particles->particle_list[1]->x - particles->particle_list[0]->x;
+    high_prec dy_post = particles->particle_list[1]->y - particles->particle_list[0]->y;
+    high_prec distance_post = hypot(dx_post, dy_post); 
+    high_prec nx_post = dx_post / distance_post;
+    high_prec ny_post = dy_post / distance_post;
+
+    high_prec rel_vel_x_post = particles->particle_list[1]->vx - particles->particle_list[0]->vx;
+    high_prec rel_vel_y_post = particles->particle_list[1]->vy - particles->particle_list[0]->vy;
+    //calculate the relative velocity in the normal direction
+    high_prec rel_vel_n_post = rel_vel_x_post * nx_post + rel_vel_y_post * ny_post;
+    cout << "rel_vel_normal (post-grav): " << rel_vel_n_post << endl;
+
 
     // Step 7: validate conservation of energy
     high_prec TE_post = calc_TE(particles); //calc total energy after the update
