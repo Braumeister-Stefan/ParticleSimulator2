@@ -1,10 +1,11 @@
-#BELOW INSTRUCTIONS ARE FOR INFORMATION OF THE CONTRACTED FREELANCER
+## BELOW INSTRUCTIONS ARE FOR INFORMATION OF THE CONTRACTED FREELANCER
 
-Introduction
+# Introduction
 I built a c++ codebase that simulates 2D collisions and gravitational interactions of n-body problems. The primary use case is for astronomic simulations, hence code needs to handle sufficiently long timeframes and massive objects for gravitational interactions to be meaningful.
-Problem statement
+# Problem statement
 The code compiles and runs on my end for simulations of perfectly elastic particles. Gravitational and collision effects work fine for perfectly elastic particles, and the conservation of momentum and energy is as expected. When particles however are inelastic, the simulation seems to either add/subtract energy from the system, which violates conservation laws.
-Work requirement
+
+# Work requirement
 The work requirement is divided into two separate phases.
 Phase 1: Upon acceptance of the offer, the freelancer will have to deliver on the following 4 deliverables within the specified timeframe:
 1)	Compile and run the code and confirm with me that they are able to produce simulation outcomes for inelastic particles with less than 2% error for the Testing Sets.
@@ -13,27 +14,37 @@ Phase 1: Upon acceptance of the offer, the freelancer will have to deliver on th
 4)	Provide a written mid-work update when the delivery of phase 1 is roughly halfway through.
 Phase 2 (potential but unguaranteed extension): Implementation of the above diagnosis and solution to the code, correcting the key issues giving rise to the problem statement and validating the results numerically (e.g. change in total energy) and visually, by confirming “physical” behaviour in simulation outcomes (e.g. GIF).
 Threshold for error
-The threshold for error is set to 2% error in total energy between start and end of the simulation, for a reasonable simulation timeline (sufficient to observe effects similar to the GIF images contained in the repo). 
-Testing Sets
+The threshold for error is set to 2% error in total energy between start and end of the simulation, for a reasonable simulation timeline (sufficient to observe effects similar to the GIF images contained in the repo).
+
+# Testing Sets
 The existing testing sets that are confirmed to produce elastic simulations below the threshold error are provided as Test1, Test2, Test3, Test4. Any further tests to be created should maintain this naming convention.
-Delivered materials
+
+# Delivered materials
 Upon acceptance of the offer, the freelancer confirms that they understand the shared GitHub Branche sufficiently to commence work on the 4 deliverables.
-Handover of materials
+
+# Handover of materials
 Any sharing of materials between the two parties can be coordinated either through GitHub or through a data transfer method (e.g. WeTransfer) of the freelancer’s choice. The initiative to request critical materials and share (intermediate) deliverables is fully on the side of the freelancer.
-Dependencies
+
+# Dependencies
 The code is dependent on the open source boost_1_86_0 library for high precision floats. This can be shared following instructions in handover of materials upon request.
-Payment
+
+# Payment
 A payment of 120 USD will be provided on the completion of all 4 deliverables described in Phase 1, in full, within the specified timeframe. 
 A discretionary bonus payment of up to 50 USD can be provided, subject to a high quality of deliverables.
-Timeframe
+
+# Timeframe
 The timeframe is 8 days from the acceptance of the offer. 
-Communication requirements
+
+# Communication requirements
 Both parties agree to use Fiverr as primary communication platform.
 It is the sole responsibility of the freelancer to timely make any requests for additional information (both guidance regarding the project) and requests for additional files which is deemed necessary for successful delivery of the 4 deliverables.
 It is the responsibility of the client to respond within 24 hours following any inquiries from the freelancer.
-Github Branche
-Diagnostics
-Logging capacity currently present in the code (kinetic, potential, heating, total energy, momentum) to be leveraged for purposes of debugging. 
+
+# Github Branche
+https://github.com/Braumeister-Stefan/ParticleSimulator2/Fiverr_branch/
+
+# Diagnostics
+Logging capacity currently present in the code (kinetic, potential, heating, total energy, momentum) can be leveraged for purposes of debugging. 
 
 
 
