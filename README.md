@@ -41,7 +41,7 @@ It is the sole responsibility of the freelancer to timely make any requests for 
 It is the responsibility of the client to respond within 24 hours following any inquiries from the freelancer.
 
 # Github Branche
-https://github.com/Braumeister-Stefan/ParticleSimulator2/Fiverr_branch/
+https://github.com/Braumeister-Stefan/ParticleSimulator2/tree/Fiverr_branch
 
 # Diagnostics
 Logging capacity currently present in the code (kinetic, potential, heating, total energy, momentum) can be leveraged for purposes of debugging. 
