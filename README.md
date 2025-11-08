@@ -52,7 +52,7 @@ Logging capacity currently present in the code (kinetic, potential, heating, tot
 
 
 
-#ORIGINAL README BEFORE HANDOVER TO FREELANCER------------------------------------
+## ORIGINAL README BEFORE HANDOVER TO FREELANCER------------------------------------
 
 # ParticleSimulator2
 
