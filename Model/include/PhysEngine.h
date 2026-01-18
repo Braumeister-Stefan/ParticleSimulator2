@@ -41,6 +41,7 @@ public:
 
     // Energy and momentum calculations
     high_prec calc_TE(shared_ptr<Particles> particles);
+    high_prec calc_KE_ij(shared_ptr<Particle> p1, shared_ptr<Particle> p2);
     high_prec calc_TE_ij(shared_ptr<Particle> p1, shared_ptr<Particle> p2, bool verbose = false);
     momentum calc_mom(shared_ptr<Particles> particles);
     momentum calc_mom_ij(shared_ptr<Particle> p1, shared_ptr<Particle> p2);
@@ -105,7 +106,9 @@ private:
     high_prec calculate_overlap_amount(shared_ptr<Particle> p1, shared_ptr<Particle> p2) {
         high_prec dist = hypot(p1->x - p2->x, p1->y - p2->y);
         high_prec sum_radii = p1->rad + p2->rad;
-        return max(high_prec(0.0), sum_radii - dist);
+        //return max(high_prec(0.0), sum_radii - dist);
+        return sum_radii - dist;
+
     }
 
     // ADD THIS METHOD DECLARATION:

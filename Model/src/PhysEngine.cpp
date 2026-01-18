@@ -129,7 +129,7 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     cout << "Press enter to start the simulation." << endl;
     cin.ignore();
-    cin.get();
+    //cin.get();
 
     // 3. Initialize time step
     Engine::dt = scenario->dt;
@@ -158,6 +158,9 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     // 4. Main loop
     for (int i = 0; i < steps; i++) {
+
+        //cout << endl;
+        //cout << "=== TIME STEP " << i << " ===" << endl;
 
         if (!particle_states->metrics[i]) {
             particle_states->metrics[i] = make_shared<test_metrics_t>();
@@ -237,7 +240,7 @@ void Engine::update_particles(shared_ptr<Particles> particles)
 {
     // Track momentum at each substep
     momentum mom_start = calc_mom(particles);
-    cout << "DEBUG: Initial momentum - x: " << mom_start.x << ", y: " << mom_start.y << endl;
+    //cout << "DEBUG: Initial momentum - x: " << mom_start.x << ", y: " << mom_start.y << endl;
 
     bool no_overlap = false;
     high_prec te_pre_overlap = calc_TE(particles);
@@ -266,8 +269,8 @@ void Engine::update_particles(shared_ptr<Particles> particles)
     correct_global_momentum(particles, mom_start);
 
     momentum mom_final = calc_mom(particles);
-    cout << "DEBUG: Final momentum change - x: " << mom_final.x - mom_start.x 
-         << ", y: " << mom_final.y - mom_start.y << endl;
+    //cout << "DEBUG: Final momentum change - x: " << mom_final.x - mom_start.x 
+    //     << ", y: " << mom_final.y - mom_start.y << endl;
 }
 
 
@@ -288,8 +291,9 @@ bool Engine::resolve_overlaps(shared_ptr<Particles> particles) {
     s_margin_TE_error_overlap_ij_corrected = 0.0;
 
     // IMPROVED: Use adaptive overlap resolution
-    high_prec system_scale = calculate_system_scale(particles);
-    high_prec adaptive_tolerance = system_scale * 1e-10;
+    //high_prec system_scale = calculate_system_scale(particles);
+    //high_prec adaptive_tolerance = system_scale * 1e-10;
+    high_prec adaptive_tolerance = -1e-7L;
     
     int max_iterations = 20;
     int iterations = 0;
@@ -303,7 +307,30 @@ bool Engine::resolve_overlaps(shared_ptr<Particles> particles) {
         for (int i = 0; i < particles->particle_list.size(); i++) {
             for (int j = i + 1; j < particles->particle_list.size(); j++) {
                 high_prec overlap_amount = calculate_overlap_amount(particles->particle_list[i], particles->particle_list[j]);
+
+                
+
+                //cout << "Checking particles " << i << " and " << j 
+                //     << " for overlap. Overlap amount: " << overlap_amount << endl;
+                
                 if (overlap_amount > adaptive_tolerance) {
+                    //cout << "overlap = TRUE" << endl;
+                    //cin.get();
+                }
+                
+                
+
+                if (overlap_amount > adaptive_tolerance) {
+                    
+                    //set cout to high precision
+                    cout << setprecision(numeric_limits<high_prec>::digits10 + 1);
+                    //below is in high precision
+                    //cout << "overlap amount before overlap correction" << overlap_amount << endl;
+
+                    //user input to pause
+                    //cin.get();
+
+
                     no_overlap = false;
                     max_overlap = max(max_overlap, overlap_amount);
                     pair_count++;
@@ -311,6 +338,12 @@ bool Engine::resolve_overlaps(shared_ptr<Particles> particles) {
                     high_prec TE_pre_overlap = calc_TE(particles);
                     
                     resolve_overlap_ij(particles->particle_list[i], particles->particle_list[j]);
+
+                    high_prec overlap_amount_post = calculate_overlap_amount(particles->particle_list[i], particles->particle_list[j]);
+
+                    //cout << "overlap amount after overlap correction: " << overlap_amount_post << endl;
+
+
 
                     high_prec TE_post_overlap = calc_TE(particles);
                     high_prec TE_error_overlap = (TE_post_overlap - TE_pre_overlap) / TE_pre_overlap;
@@ -337,6 +370,8 @@ bool Engine::resolve_overlaps(shared_ptr<Particles> particles) {
     return no_overlap;
 
 }
+
+
 
 
 void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Particle> particle_j) 
@@ -370,7 +405,8 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     high_prec m1 = particle_i->m;
     high_prec m2 = particle_j->m;
     high_prec total_mass = m1 + m2;
-    high_prec separation_buffer = 1e-5L;
+    //high_prec separation_buffer = 1e-5L;
+    high_prec separation_buffer = 0;
     high_prec total_separation = overlap_amount + separation_buffer;
     high_prec d1 = (total_separation * m2) / total_mass;
     high_prec d2 = (total_separation * m1) / total_mass;
@@ -380,59 +416,59 @@ void Engine::resolve_overlap_ij(shared_ptr<Particle> particle_i, shared_ptr<Part
     particle_j->x += nx * d2;
     particle_j->y += ny * d2;
 
-    // --- Velocity update (elastic collision) ---
-    high_prec v1n = particle_i->vx * nx + particle_i->vy * ny;
-    high_prec v2n = particle_j->vx * nx + particle_j->vy * ny;
+    // // --- Velocity update (elastic collision) ---
+    // high_prec v1n = particle_i->vx * nx + particle_i->vy * ny;
+    // high_prec v2n = particle_j->vx * nx + particle_j->vy * ny;
 
-    // Only process if moving toward each other
-    if (v2n - v1n < 0) {
-        high_prec v1t = -particle_i->vx * ny + particle_i->vy * nx;
-        high_prec v2t = -particle_j->vx * ny + particle_j->vy * nx;
+    // // Only process if moving toward each other
+    // if (v2n - v1n < 0) {
+    //     high_prec v1t = -particle_i->vx * ny + particle_i->vy * nx;
+    //     high_prec v2t = -particle_j->vx * ny + particle_j->vy * nx;
 
-        high_prec v1n_new = ((m1 - m2) * v1n + 2 * m2 * v2n) / (m1 + m2);
-        high_prec v2n_new = ((m2 - m1) * v2n + 2 * m1 * v1n) / (m1 + m2);
+    //     high_prec v1n_new = ((m1 - m2) * v1n + 2 * m2 * v2n) / (m1 + m2);
+    //     high_prec v2n_new = ((m2 - m1) * v2n + 2 * m1 * v1n) / (m1 + m2);
 
-        particle_i->vx = v1n_new * nx - v1t * ny;
-        particle_i->vy = v1n_new * ny + v1t * nx;
-        particle_j->vx = v2n_new * nx - v2t * ny;
-        particle_j->vy = v2n_new * ny + v2t * nx;
-    }
+    //     particle_i->vx = v1n_new * nx - v1t * ny;
+    //     particle_i->vy = v1n_new * ny + v1t * nx;
+    //     particle_j->vx = v2n_new * nx - v2t * ny;
+    //     particle_j->vy = v2n_new * ny + v2t * nx;
+    // }
 
-    // --- Energy correction (momentum-conserving) ---
-    high_prec v1x_pre = particle_i->vx;
-    high_prec v1y_pre = particle_i->vy;
-    high_prec v2x_pre = particle_j->vx;
-    high_prec v2y_pre = particle_j->vy;
+    // // --- Energy correction (momentum-conserving) ---
+    // high_prec v1x_pre = particle_i->vx;
+    // high_prec v1y_pre = particle_i->vy;
+    // high_prec v2x_pre = particle_j->vx;
+    // high_prec v2y_pre = particle_j->vy;
 
-    high_prec TE_pre_ij = 0.5L * m1 * (v1x_pre*v1x_pre + v1y_pre*v1y_pre) 
-                        + 0.5L * m2 * (v2x_pre*v2x_pre + v2y_pre*v2y_pre);
-    high_prec TE_post_ij = 0.5L * m1 * (particle_i->vx*particle_i->vx + particle_i->vy*particle_i->vy)
-                         + 0.5L * m2 * (particle_j->vx*particle_j->vx + particle_j->vy*particle_j->vy);
+    // high_prec TE_pre_ij = 0.5L * m1 * (v1x_pre*v1x_pre + v1y_pre*v1y_pre) 
+    //                     + 0.5L * m2 * (v2x_pre*v2x_pre + v2y_pre*v2y_pre);
+    // high_prec TE_post_ij = 0.5L * m1 * (particle_i->vx*particle_i->vx + particle_i->vy*particle_i->vy)
+    //                      + 0.5L * m2 * (particle_j->vx*particle_j->vx + particle_j->vy*particle_j->vy);
 
-    high_prec delta_E = TE_post_ij - TE_pre_ij;
+    // high_prec delta_E = TE_post_ij - TE_pre_ij;
 
-    // Apply correction only if energy deviation is significant
-    if (fabs(delta_E) > 1e-12L)
-        apply_energy_correction(particle_i, particle_j, delta_E);
+    // // Apply correction only if energy deviation is significant
+    // if (fabs(delta_E) > 1e-12L)
+    //     apply_energy_correction(particle_i, particle_j, delta_E);
 
     // Done — no global scaling applied
 
     // VERIFY MOMENTUM CONSERVATION FOR THIS PAIR
-    momentum final_mom_ij = calc_mom_ij(particle_i, particle_j);
-    high_prec mom_error_x = final_mom_ij.x - initial_mom_ij.x;
-    high_prec mom_error_y = final_mom_ij.y - initial_mom_ij.y;
+    // momentum final_mom_ij = calc_mom_ij(particle_i, particle_j);
+    // high_prec mom_error_x = final_mom_ij.x - initial_mom_ij.x;
+    // high_prec mom_error_y = final_mom_ij.y - initial_mom_ij.y;
     
-    if (fabs(mom_error_x) > 1e-12 || fabs(mom_error_y) > 1e-12) {
-        cout << "MOMENTUM ERROR in resolve_overlap_ij: dx=" << mom_error_x 
-             << ", dy=" << mom_error_y << " at iter " << overlap_ij_iter << endl;
+    // if (fabs(mom_error_x) > 1e-12 || fabs(mom_error_y) > 1e-12) {
+    //     cout << "MOMENTUM ERROR in resolve_overlap_ij: dx=" << mom_error_x 
+    //          << ", dy=" << mom_error_y << " at iter " << overlap_ij_iter << endl;
         
-        // CORRECT THE MOMENTUM ERROR
-        high_prec total_mass = particle_i->m + particle_j->m;
-        particle_i->vx -= mom_error_x / total_mass;
-        particle_j->vx += mom_error_x / total_mass;
-        particle_i->vy -= mom_error_y / total_mass;
-        particle_j->vy += mom_error_y / total_mass;
-    }
+    //     // CORRECT THE MOMENTUM ERROR
+    //     high_prec total_mass = particle_i->m + particle_j->m;
+    //     particle_i->vx -= mom_error_x / total_mass;
+    //     particle_j->vx += mom_error_x / total_mass;
+    //     particle_i->vy -= mom_error_y / total_mass;
+    //     particle_j->vy += mom_error_y / total_mass;
+    // }
 
 }
 
@@ -643,6 +679,17 @@ high_prec Engine::heat_ij(high_prec E, shared_ptr<Particle> particle_i, shared_p
 void Engine::resolve_collisions(shared_ptr<Particles> particles) {
     for (int i = 0; i < particles->particle_list.size(); i++) {
         for (int j = i + 1; j < particles->particle_list.size(); j++) {
+
+            //cout << "Checking collision between particles " << i << " and " << j << endl;
+            high_prec overlap = check_overlap(particles->particle_list[i], particles->particle_list[j]);
+
+            
+            
+            high_prec overlap_distance = calculate_overlap_amount(particles->particle_list[i], particles->particle_list[j]);
+            cout << setprecision(numeric_limits<high_prec>::digits10 + 1);
+            //cout << "Overlap distance before collision: " << overlap_distance << endl;
+
+
             bool collision = check_collision(particles->particle_list[i], particles->particle_list[j]);
             
             if (collision) {
@@ -650,6 +697,12 @@ void Engine::resolve_collisions(shared_ptr<Particles> particles) {
                 collissions++;
                 resolve_collision(particles->particle_list[i], particles->particle_list[j]);
             }
+            
+            high_prec overlap_distance_post = calculate_overlap_amount(particles->particle_list[i], particles->particle_list[j]);
+
+
+            cout << setprecision(numeric_limits<high_prec>::digits10 + 1);
+            //cout << "Overlap post collission: " << overlap_distance_post << endl;
         }
     }
 }
@@ -669,10 +722,31 @@ bool Engine::check_collision(shared_ptr<Particle> particle1, shared_ptr<Particle
 
     //2. check if the distance+threshold is smaller than the sum of the radii of the particles
     high_prec sum_radii = particle1->rad + particle2->rad;
-    high_prec tolerance = 1e-8L;
-    if ((abs(distance - sum_radii) < tolerance) && (relative_velocity > 0)) {
+    high_prec tolerance = 1e-5L;
+
+    cout << setprecision(numeric_limits<high_prec>::digits10 + 1);
+    //cout << "check collision flag" << endl;
+
+    //cout << "sum_radii - distance: " << (sum_radii - distance) << endl;
+    //cout << "sum_raddi - distance (abs): " << abs(sum_radii - distance) << endl;
+    //cout << "tolerance: " << tolerance << endl;
+
+    bool distance_flag = (abs(sum_radii - distance) < tolerance);
+    bool relative_velocity_flag = (relative_velocity > 0);
+
+    //cout << "Distance flag: " << distance_flag << ", Relative velocity flag: " << relative_velocity_flag << endl;
+
+
+
+    if ((distance_flag) && (relative_velocity_flag)) {
+
+        //cout << "Collision=TRUE" << endl;
+        //cin.get();
+
         return true;
     } else {
+
+        //cout << "Collision=FALSE" << endl;
         return false;
     }
 }
@@ -690,7 +764,19 @@ bool Engine::check_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> 
 
 void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
     // Store pre-collision momentum for verification
+
+    //cout << "Resolving collision" << endl;
+
     momentum mom_pre = calc_mom_ij(particle1, particle2);
+
+    // Store initial kinetic energy
+    high_prec KE_pre = 0.5L * particle1->m * (particle1->vx * particle1->vx + particle1->vy * particle1->vy)
+                    + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy);
+
+    high_prec TE_pre = calc_TE_ij(particle1, particle2);
+
+
+    
 
     // Calculate the normal vector
     high_prec dx = particle2->x - particle1->x;
@@ -743,6 +829,36 @@ void Engine::resolve_collission(shared_ptr<Particle> particle1, shared_ptr<Parti
     particle1->vy = v1n_new * ny + v1t_new * ty;
     particle2->vx = v2n_new * nx + v2t_new * tx;
     particle2->vy = v2n_new * ny + v2t_new * ty;
+
+    // Calculate post-collision kinetic energy
+    high_prec KE_post = 0.5L * particle1->m * (particle1->vx * particle1->vx + particle1->vy * particle1->vy)
+                        + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy);
+
+    high_prec TE_post = calc_TE_ij(particle1, particle2);
+
+    //convert lost kinetic energy to heat
+
+    cout << setprecision(numeric_limits<high_prec>::digits10 + 1);
+    
+
+    //cout << "TE pre-collision: " << TE_pre << ", TE post-collision: " << TE_post << endl;
+    //cout << "KE pre-collision: " << KE_pre << ", KE post-collision: " << KE_post << endl;
+
+
+
+
+    high_prec energy_lost = KE_pre - KE_post;
+
+    //cout << "Energy lost in collision: " << energy_lost << endl;
+
+
+    heat_ij(energy_lost, particle1, particle2);
+
+    high_prec TE_postheat = calc_TE_ij(particle1, particle2);
+
+    //cout << "TE post heat conversion: " << TE_postheat << endl;
+
+
 
     // Verify momentum conservation
     momentum mom_post = calc_mom_ij(particle1, particle2);
@@ -857,13 +973,13 @@ void Engine::resolve_gravity_verlet(std::shared_ptr<Particles> particles) {
     high_prec TE_diff = TE_post - TE_pre;
     high_prec TE_error = TE_pre == 0 ? TE_diff : TE_diff / TE_pre;
 
-    if (abs(TE_error) > 0.001L) {
-        std::cout << "[DEBUG_VERLET] Energy change in step: "
-                  << (double)(TE_error * 100.0L)
-                  << "% (TE_pre=" << (double)TE_pre
-                  << ", TE_post=" << (double)TE_post << ")"
-                  << std::endl;
-    }
+    //if (abs(TE_error) > 0.001L) {
+    //    std::cout << "[DEBUG_VERLET] Energy change in step: "
+    //              << (double)(TE_error * 100.0L)
+    //              << "% (TE_pre=" << (double)TE_pre
+    //              << ", TE_post=" << (double)TE_post << ")"
+    //              << std::endl;
+    //}
 
     total_TE_error_verlet += (TE_post - TE_pre);
     // --- Diagnostics (limited debug for first 100 steps) ---
@@ -874,12 +990,12 @@ void Engine::resolve_gravity_verlet(std::shared_ptr<Particles> particles) {
         high_prec TE_diff = TE_post - TE_pre;
         high_prec TE_error = TE_pre == 0 ? TE_diff : TE_diff / TE_pre;
 
-            std::cout << "[DEBUG_VERLET_STEP] "
-              << "step=" << local_step
-              << ", drift=" << (double)(TE_error * 100.0L)
-              << "%, TE_pre=" << (double)TE_pre
-              << ", TE_post=" << (double)TE_post
-              << std::endl;
+            //std::cout << "[DEBUG_VERLET_STEP] "
+            //  << "step=" << local_step
+            //  << ", drift=" << (double)(TE_error * 100.0L)
+            //  << "%, TE_pre=" << (double)TE_pre
+            //  << ", TE_post=" << (double)TE_post
+            //  << std::endl;
     }
 
     local_step++;
