@@ -1,6 +1,7 @@
 #include "../include/ObjHandler.h"
 #include "../include/InitStructs.h"
 #include "../include/MathUtils.h"
+#include "../include/PhysEngineCore.h"
 #define CSV_IO_NO_THREAD
 #include "../include/3party/csv.h"
 #include "../include/Particles.h"
@@ -35,6 +36,13 @@ ObjHandler::~ObjHandler() {
 shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     //This function will load the list of objects for the selected scenario and flatten them into a single struct.
 
+    //0. List of objects to be loaded
+    cout << "Loading objects for the selected scenario:" << endl;
+
+    for (const auto& name : scenario->obj_list) {
+        cout << name;
+    }
+
 
     //1. Retrieve the object_inputs from csv file
     string object_input_path = "Inputs/object_inputs.csv";
@@ -44,22 +52,22 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    const int column_count = 17;
+    const int column_count = 18;
 
     io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(object_input_path);
 
     //3. Read the contents of the csv file and store each row in a object object. Store all object objects in a vector.
     objects object_list;
 
-    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17;
+    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18;
 
     int objects_loaded = 1;
 
     //discard the header row. This list is a guide to the columns in the csv file.
-    in.read_header(io::ignore_extra_column, "OBJECT_NAME", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "TEMP","COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
+    in.read_header(io::ignore_extra_column, "OBJECT_NAME", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "TEMP","COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N", "OMEGA");
 
 
-    while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17)) {
+    while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18)) {
     
 
         unique_ptr<object> new_object(new object);
@@ -97,6 +105,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
         new_object->complexity_size = safe_stod(col16);
         new_object->complexity_n = stoi(col17);
+        new_object->omega = safe_stod(col18);
 
         
         //add the new scenario to the list of scenarios
@@ -113,7 +122,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     //}
 
 
-    //4. Retrieve the objects from the object_list that are in the obj_list of the selected scenario
+    //4a. Retrieve the objects from the object_list that are in the obj_list of the selected scenario
 
     shared_ptr<objects> requested_objects(new objects);
     
@@ -124,33 +133,89 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
         }
     }
 
+    //4b print the list of objects in the scenario obj_list, which could not be found in the object_inputs.csv file
+    string cache_found_names;
+
+    shared_ptr<Particles> sim_states(new Particles);
+
+    auto trim = [](string& s) {
+        while (!s.empty() && (s.front()==' ' || s.front()=='\t')) s.erase(s.begin());
+        while (!s.empty() && (s.back() ==' ' || s.back() =='\t')) s.pop_back();
+    };
+
+    istringstream ss(scenario->obj_list);
+    for (string name; getline(ss, name, ','); ) {
+        trim(name);
+        bool found = false;
+
+        for (auto &object : requested_objects->object_list) {
+            if (object && object->name == name) { found = true; break; }
+        }
+
+        if (!found) {
+            
+
+            if (auto cached = obj_from_cache(name)) {
+                //cout << "Object found in " << name << ".csv\n";
+
+                if (!cache_found_names.empty()) cache_found_names += ", ";
+                cache_found_names += name;
+
+
+                for (auto &p : cached->particle_list) sim_states->particle_list.push_back(std::move(p));
+            } else {
+                cout << "Object not found in object_inputs.csv or rendered cache!\n" << endl;
+            }
+        }
+    }
     //5 communicate the found objects to the user
+
+
 
     cout << "The following objects have been succesfully selected:" << endl;
 
     for (int i = 0; i < requested_objects->object_list.size(); i++) {
-        cout << requested_objects->object_list[i]->object_id << ". " << requested_objects->object_list[i]->name << endl;
+        cout << requested_objects->object_list[i]->object_id << ". "
+            << requested_objects->object_list[i]->name << endl;
     }
 
+    // append cached/simulated objects as extra list entries, marked with '*'
+    if (!cache_found_names.empty()) {
+        std::istringstream css(cache_found_names);
+        std::string n;
+        int id = static_cast<int>(requested_objects->object_list.size()) + 1;
+
+        while (std::getline(css, n, ',')) {
+            while (!n.empty() && (n.front()==' ' || n.front()=='\t')) n.erase(n.begin());
+            while (!n.empty() && (n.back() ==' ' || n.back() =='\t')) n.pop_back();
+            if (n.empty()) continue;
+
+            cout << "*" << id++ << ". " << n << endl;
+        }
+    }
     
 
-    //6. Flatten the objects and store all objects in a single struct
+    //6a. Flatten the objects and store all objects in a single struct
 
     shared_ptr<Particles> particles = flatten_objs(requested_objects, scenario);
 
-    //7. Remove overlapping particles
 
-    remove_overlaps(particles);
+    //6b. Add sim_states particles to particles
+    for (auto &p : sim_states->particle_list) particles->particle_list.push_back(std::move(p));
+
+
+
+    //7. Remove overlapping particles with slop 
+
+    remove_overlaps2(particles, high_prec("0.1"));
+    
 
     //8 Inform user of the number of particles loaded
 
     cout << "Loaded " << particles->particle_list.size() << " particles." << endl;
 
     //9. Return the particles struct
-    
-    //print the xv and yv of the first particle
-    //cout << "vx: " << particles->particle_list[0]->vx << endl;
-    //cout << "vy: " << particles->particle_list[0]->vy << endl;
+
 
 
     return particles;
@@ -193,10 +258,13 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
             //if the refresh_obj flag is false, attempt to retrieve the particles from the cache
             if (!scenario->refresh_obj) {
 
+                
                 complex_particles = obj_from_cache(object->name);
 
                 if (complex_particles == nullptr) {
                     complex_particles = flatten_complex_obj(object);
+                } else {
+                    cout << "Loaded " << object->name << " from cache." << endl;
                 }
                 
                
@@ -289,75 +357,77 @@ shared_ptr<Particles> ObjHandler::flatten_complex_obj(shared_ptr<object> request
 
 }
 
+
+void add_rotation(Particle& particle, const Vector2D& center, const high_prec& omega) {
+    high_prec dx = high_prec(particle.x) - center.x;
+    high_prec dy = high_prec(particle.y) - center.y;
+
+    high_prec dvx = -omega * dy;
+    high_prec dvy =  omega * dx;
+
+    particle.vx += dvx.convert_to<double>();
+    particle.vy += dvy.convert_to<double>();
+}
+
+
 shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> complex_object) {
-    //This function will flatten a complex circle object and store it in a Particles struct
-
-    //create a Particles struct to store the flattened objects as particles
     shared_ptr<Particles> particles(new Particles);
-
-    //1. retrieve complexity parameters
 
     high_prec circle_rad = complex_object->complexity_size;
     int complexity_n = static_cast<int>(complex_object->complexity_n.convert_to<double>());
     Vector2D center = { complex_object->x, complex_object->y };
 
+    // assume omega exists on complex_object
+    high_prec omega = complex_object->omega;
 
-    //loop through n*3 times the complexity_n and sample random points within the circle radius (defined by complexity_size)
-    for (int i = 0; i < 4*complexity_n; i++) {
 
-        //check if the number of particles loaded is equal to the complexity_n
-        if (particles->particle_list.size() == complexity_n) {
-            break;
-        }
-        
-        //store the sampled point in a particle struct and add it to the particles struct
+
+    // Keep sampling + de-overlap until we reach exactly complexity_n (or hit a safety limit)
+    int attempts = 0;
+    int max_attempts = 50 * std::max(1, complexity_n);
+
+    while (static_cast<int>(particles->particle_list.size()) < complexity_n && attempts < max_attempts) {
+        attempts++;
+
         unique_ptr<Particle> particle(new Particle);
-        
-        //sample a random point within the circle radius using the above formula
 
         Vector2D sample_point = sample_in_circle(center, circle_rad);
 
-        
-
-
-        particle->particle_id = i;
+        particle->particle_id = attempts; // stable unique-ish id; remove_overlaps re-sorts anyway
         particle->r = complex_object->r;
         particle->g = complex_object->g;
         particle->b = complex_object->b;
         particle->x = sample_point.x.convert_to<double>();
         particle->y = sample_point.y.convert_to<double>();
         particle->z = 0;
+
+        // base translational velocity
         particle->vx = complex_object->vx;
         particle->vy = complex_object->vy;
-
-        //print vx and vy
-        //cout << "vx: " << particle->vx << " vy: " << particle->vy << endl;
-
-
         particle->vz = complex_object->vz;
-        particle->rad = complex_object->rad;
+
+        particle->rad  = complex_object->rad;
         particle->rest = complex_object->rest;
         particle->temp = complex_object->temp;
 
+        // add rigid-body tangential velocity about the circle center
+        add_rotation(*particle, center, omega);
 
-        particles->particle_list.push_back(move(particle));
+        particles->particle_list.push_back(std::move(particle));
+
+        // enforce non-overlap as we build (ensures we end with ~exactly complexity_n)
+        remove_overlaps(particles);
     }
 
-    //remove overlapping particles
-    
-    remove_overlaps(particles);
-
-    //set mass equal to complex_object mass divided by size of particles
-    high_prec m_i = complex_object->m / particles->particle_list.size();
-
-    for (int i = 0; i < particles->particle_list.size(); i++) {
-        particles->particle_list[i]->m = m_i;
+    // set mass equal to complex_object mass divided by final particle count
+    if (!particles->particle_list.empty()) {
+        high_prec m_i = complex_object->m / particles->particle_list.size();
+        for (int i = 0; i < static_cast<int>(particles->particle_list.size()); i++) {
+            particles->particle_list[i]->m = m_i;
+        }
     }
-
-    
 
     return particles;
-
 }
 
 shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
@@ -368,11 +438,13 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
     bool cache_exists = false;
 
     string cache_path = "Inputs/rendered_objects/" + obj_name + ".csv";
+    cout << "Checking for cache file at " << cache_path << endl;
 
     ifstream cache_file(cache_path);
 
     if (cache_file.good()) {
         cache_exists = true;
+        cout << "Cache file found for object " << obj_name << "." << endl;
     }
 
     //2. if the cache file exists, read the particles from the cache file and store them in a particles struct
@@ -387,19 +459,21 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
 
         const int column_count = 17;
 
+        
+
         io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(cache_path);
 
         //3. Read the contents of the csv file and store each row in a particle object. Store all particle objects in a vector.
         string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17;
 
         int particles_loaded = 1;
-
+        
         //discard the header row. This list is a guide to the columns in the csv file.
         in.read_header(io::ignore_extra_column, "PARTICLE_ID", "R", "G", "B", "X", "Y", "Z", "VX", "VY", "VZ", "M", "RAD", "REST", "TEMP","COMPLEXITY", "COMPLEXITY_SIZE", "COMPLEXITY_N");
-
+        
         while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17)) {
     
-
+            //cout << "Loading particle " << particles_loaded << " from cache." << endl;
             unique_ptr<Particle> new_particle(new Particle);
 
             new_particle->particle_id = particles_loaded;
@@ -424,8 +498,10 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
 
             particles_loaded++;
 
+            
         }
 
+    
         return particles;
 
 
@@ -475,15 +551,86 @@ void ObjHandler::obj_to_cache(shared_ptr<object> complex_object, shared_ptr<Part
                 << particle->m << ","
                 << particle->rad << ","
                 << particle->rest << ","
+                << particle->temp << ","
                 << complex_object->complexity << ","
                 << complex_object->complexity_size << ","
-                << complex_object->complexity_n << "\n";
+                << int(1) << "\n";
+
+
+  
     }
 
     // 5. Close the cache file
     cache_file.close();
 
     cout << "Object " << complex_object->name << " saved to object cache." << endl;
+}
+
+void ObjHandler::state_to_cache(shared_ptr<Particles> final_state, string obj_name) {
+    // This function will save the final particle state as a complex object in the cache
+
+    // 1. Define the cache file path
+    string cache_path = "Inputs/rendered_objects/" + obj_name + ".csv";
+
+    // 2. Open the cache file for writing
+    ofstream cache_file(cache_path);
+
+    
+
+
+    // if obj_name is empty/FALSE, return
+    if (obj_name.empty() || obj_name == "FALSE") {
+        return;
+    }
+    if (!cache_file.is_open()) {
+        cout << "Final state could not be saved to object cache as " << obj_name << "." << endl;
+        cout <<"Attempting to force close the file." << endl;
+        //return;
+        cache_file.close();
+
+        //try to open again
+        cache_file.open(cache_path);
+    }
+ 
+
+
+
+
+    // 3. Write the header row
+    cache_file << "PARTICLE_ID,R,G,B,X,Y,Z,VX,VY,VZ,M,RAD,REST,TEMP,COMPLEXITY,COMPLEXITY_SIZE,COMPLEXITY_N\n";
+
+    // 4. Write the particles to the cache file
+
+    
+
+    for (const auto& particle : final_state->particle_list) {
+        cache_file << particle->particle_id << ","
+                << particle->r << ","
+                << particle->g << ","
+                << particle->b << ","
+                << particle->x << ","
+                << particle->y << ","
+                << particle->z << ","
+                << particle->vx << ","
+                << particle->vy << ","
+                << particle->vz << ","
+                << particle->m << ","
+                << particle->rad << ","
+                << particle->rest << ","
+                << particle->temp << ","
+                << obj_name << ","
+                << int(1) << ","
+                << int(1) << "\n";
+
+        
+
+
+    }
+
+    // 5. Close the cache file
+    cache_file.close();
+
+    cout << "Simulation result saved as object: " <<  obj_name << "." << endl;
 }
 
 
@@ -521,6 +668,36 @@ void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
 
     cout << "Removed " << removed_overlaps << " overlapping particles." << endl;
 }
+
+void ObjHandler::remove_overlaps2(shared_ptr<Particles> particles, high_prec slop) {
+    //this function uses calculate_overlap_amount from PhysEngineCore to remove overlapping particles if overlap is greater than slop
+    vector<shared_ptr<Particle>> non_overlapping_particles;
+    int removed_overlaps = 0;
+    EngineCore engine_core;
+
+    // Iterate over each particle
+    for (int i = 0; i < particles->particle_list.size(); ++i) {
+        bool overlap_found = false;
+        // Compare the current particle with all remaining particles
+        for (int j = i + 1; j < particles->particle_list.size(); ++j) {
+            high_prec overlap_amount = engine_core.calculate_overlap_amount(particles->particle_list[i], particles->particle_list[j]);
+            if (overlap_amount > slop) {
+                overlap_found = true;
+                ++removed_overlaps;
+                break; // Stop further checks for this particle since it's overlapped
+            }
+        }
+        
+        // If no overlap was found, keep the particle
+        if (!overlap_found) {
+            non_overlapping_particles.push_back(particles->particle_list[i]);
+        }
+    }
+    // Replace the original particle list with the non-overlapping particles
+    particles->particle_list = std::move(non_overlapping_particles);
+    cout << "Removed " << removed_overlaps << " overlapping particles." << endl;
+}
+
 
 bool ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2) {
     // Calculate the distance between the two particles

@@ -45,7 +45,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    const int column_count = 8;
+    const int column_count = 10;
 
     io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(scenario_input_path);
     
@@ -54,15 +54,15 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     //scenario new_scenario;
     scenarios scenario_list;
 
-    string col1, col2, col3, col4, col5, col6, col7, col8;
+    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10;
 
 
     int scenarios_loaded = 1;
 
     //discard the header row. This list is a guide to the columns in the csv file.
-    in.read_header(io::ignore_extra_column, "SCENARIO_NAME", "OBJ_LIST", "TIME", "INTERACTION_FUNC", "TRY_CACHE", "REFRESH_OBJ", "DT","3D");
+    in.read_header(io::ignore_extra_column, "SCENARIO_NAME", "OBJ_LIST", "TIME", "INTERACTION_FUNC", "TRY_CACHE", "REFRESH_OBJ", "DT","3D","BETA","SAVED_OBJ");
 
-    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8)) {
+    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10)) {
 
         unique_ptr<scenario> new_scenario(new scenario);
 
@@ -94,6 +94,20 @@ shared_ptr<scenario> Interfacer::select_scenario() {
         } else {
             new_scenario-> three_d = false;
         }
+
+        new_scenario-> beta = stod(col9);
+
+        if (col10 != "FALSE") {
+            new_scenario-> save_obj = col10;
+
+
+
+        } else {
+            new_scenario-> save_obj = false;
+
+
+        }
+
 
         
         
@@ -133,6 +147,8 @@ shared_ptr<scenario> Interfacer::select_scenario() {
             cout << "Refresh Object: " << scenario_list.scenario_list[i]->refresh_obj << endl;
             cout << "Time Step Length: " << scenario_list.scenario_list[i]->dt << endl;
             cout << "3D: " << scenario_list.scenario_list[i]->three_d << endl;
+            cout << "Contact Bias Beta: " << scenario_list.scenario_list[i]->beta << endl;
+            cout << "Saved OBJ (FALSE if not saved as object): " << scenario_list.scenario_list[i]->save_obj << endl;
         }
     }
     cout << endl;

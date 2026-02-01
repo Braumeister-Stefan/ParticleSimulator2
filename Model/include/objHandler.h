@@ -35,10 +35,13 @@ public:
     //Declare the remove overlap functions
     void remove_overlaps(shared_ptr<Particles> particles);
     bool remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Particle> particle2);
+    void remove_overlaps2(shared_ptr<Particles> particles, high_prec slop);
+    
 
     //cache functions
     shared_ptr<Particles> obj_from_cache(string obj_name);
     void obj_to_cache(shared_ptr<object> complex_object, shared_ptr<Particles> particles);
+    void state_to_cache(shared_ptr<Particles> particles, string obj_name);
 
 
     //helper functions

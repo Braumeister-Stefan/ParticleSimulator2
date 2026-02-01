@@ -23,6 +23,11 @@ struct scenario {
     bool refresh_obj; //if true, rebuild the complex objects
     high_prec dt; //time step
     bool three_d; //if false, the simulation will be in 2D
+
+    //[physics engine parameters]
+    high_prec beta = high_prec("0.1"); //contact bias beta
+    string save_obj = "FALSE"; 
+
 };
 
 struct scenarios {
@@ -48,7 +53,8 @@ struct object {
     high_prec temp; //temperature of the particle
     string complexity = "simple"; //if the object is complex, what is its shape, e.g simple, circle, square, etc.
     high_prec complexity_size; //if the object is complex, what is its radius. empty for simple objects
-    high_prec complexity_n; //how many particles make up the complex object
+    high_prec complexity_n = int(1);
+    high_prec omega;
 
 };
 

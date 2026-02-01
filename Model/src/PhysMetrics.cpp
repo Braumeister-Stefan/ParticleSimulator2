@@ -31,142 +31,142 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
         particle_states->metrics.resize(particle_states->snaps.size(), make_shared<test_metrics_t>());
     }
 
-    high_prec dt = scenario->dt;  // Time step length
-    const high_prec TE_error_threshold = 0.01;
-    const high_prec mom_change_threshold = 0.01;
+    // high_prec dt = scenario->dt;  // Time step length
+    // const high_prec TE_error_threshold = 0.01;
+    // const high_prec mom_change_threshold = 0.01;
 
-    for (int i = 0; i < particle_states->snaps.size(); i++) {
-        high_prec kinetic_energy = 0.0;
-        high_prec potential_energy = 0.0;
-        high_prec momentum_x = 0.0;
-        high_prec momentum_y = 0.0;
-        high_prec heating_energy = 0.0;
-
-
-        // Get the particles for the current snapshot
-        shared_ptr<Particles> particles = particle_states->snaps[i];
-        int particle_count = particles->particle_list.size();
-
-        // Calculate kinetic energy,momentum and temperature for the snapshot
-        for (int j = 0; j < particle_count; j++) {
-            high_prec mass = particles->particle_list[j]->m;
-            high_prec vx = particles->particle_list[j]->vx;
-            high_prec vy = particles->particle_list[j]->vy;
-            high_prec vz = particles->particle_list[j]->vz;
-            high_prec temp = particles->particle_list[j]->temp;
-
-            kinetic_energy += 0.5 * mass * (vx * vx + vy * vy + vz * vz);
-            momentum_x += mass * vx;
-            momentum_y += mass * vy;
-            heating_energy += temp;
-
-        }
-
-        // Calculate potential energy for each unique pair of particles
-        for (int j = 0; j < particle_count; j++) {
-            for (int k = j + 1; k < particle_count; k++) {
-                high_prec dx = particles->particle_list[j]->x - particles->particle_list[k]->x;
-                high_prec dy = particles->particle_list[j]->y - particles->particle_list[k]->y;
-                high_prec dz = particles->particle_list[j]->z - particles->particle_list[k]->z;
-                high_prec distance = sqrt(dx * dx + dy * dy + dz * dz);
-                potential_energy += -6.674e-11 * particles->particle_list[j]->m * particles->particle_list[k]->m / distance;
-            }
-        }
-
-        // Store calculated values in metrics
-        shared_ptr<test_metrics_t> metrics = particle_states->metrics[i];
-        metrics->KE = kinetic_energy;
-        metrics->PE = potential_energy;
-        metrics->TE = kinetic_energy + potential_energy + heating_energy;
-        metrics->mom_x = momentum_x;
-        metrics->mom_y = momentum_y;
-        metrics->HE = heating_energy;
-
-        // Calculate relative changes from the initial snapshot
-        if (i == 0) {
-            metrics->TE_change = 0.0;
-            metrics->mom_x_change = 0.0;
-            metrics->mom_y_change = 0.0;
-        } else {
-            high_prec initial_TE = particle_states->metrics[0]->TE;
-            high_prec initial_mom_x = particle_states->metrics[0]->mom_x;
-            high_prec initial_mom_y = particle_states->metrics[0]->mom_y;
-
-            metrics->TE_change = (metrics->TE - initial_TE) / initial_TE;
-            // metrics->mom_x_change = (initial_mom_x != 0) ? (momentum_x - initial_mom_x) / initial_mom_x : high_prec(0.0);
-            // metrics->mom_y_change = (initial_mom_y != 0) ? (momentum_y - initial_mom_y) / initial_mom_y : high_prec(0.0);
-
-            // NEW (FIXED):
-            metrics->mom_x_change = (fabs(initial_mom_x) > 1e-12) ? (momentum_x - initial_mom_x) / initial_mom_x : high_prec(0.0);
-            metrics->mom_y_change = (fabs(initial_mom_y) > 1e-12) ? (momentum_y - initial_mom_y) / initial_mom_y : high_prec(0.0);
-
-            //calculate the current TE versus the TE of the previous step. Call it margin_TE_error
-            //high_prec prev_TE = particle_states->metrics[i - 1]->TE;
-            //high_prec margin_TE_error = metrics->TE - prev_TE;
-            //metrics->margin_TE_error = margin_TE_error;
+    // for (int i = 0; i < particle_states->snaps.size(); i++) {
+    //     high_prec kinetic_energy = 0.0;
+    //     high_prec potential_energy = 0.0;
+    //     high_prec momentum_x = 0.0;
+    //     high_prec momentum_y = 0.0;
+    //     high_prec heating_energy = 0.0;
 
 
-        }
+    //     // Get the particles for the current snapshot
+    //     shared_ptr<Particles> particles = particle_states->snaps[i];
+    //     int particle_count = particles->particle_list.size();
 
-        // Cumulative TE error over time
-        if (i > 0) {
-            high_prec prev_TE_error = particle_states->metrics[i - 1]->TE_error;
-            high_prec te_error = metrics->TE - particle_states->metrics[i - 1]->TE;
-            metrics->TE_error = prev_TE_error + te_error;
-            metrics->relative_error = metrics->TE_error / particle_states->metrics[0]->TE;
-        } else {
-            metrics->TE_error = 0.0;
-            metrics->relative_error = 0.0;
-        }
-    }
+    //     // Calculate kinetic energy,momentum and temperature for the snapshot
+    //     for (int j = 0; j < particle_count; j++) {
+    //         high_prec mass = particles->particle_list[j]->m;
+    //         high_prec vx = particles->particle_list[j]->vx;
+    //         high_prec vy = particles->particle_list[j]->vy;
+    //         high_prec vz = particles->particle_list[j]->vz;
+    //         high_prec temp = particles->particle_list[j]->temp;
 
-    // Check thresholds for final snapshot
-    shared_ptr<test_metrics_t> final_metrics = particle_states->metrics.back();
-    if (abs(final_metrics->relative_error) > TE_error_threshold) {
-        cout << "Total Energy Error (" << final_metrics->relative_error * 100 << "%) exceeds threshold of "
-                  << TE_error_threshold * 100 << "%" << endl;
-    } else {
-        cout << "Total Energy Error (" << final_metrics->relative_error * 100 << "%) within threshold of "
-                  << TE_error_threshold * 100 << "%" << endl;
-    }
+    //         kinetic_energy += 0.5 * mass * (vx * vx + vy * vy + vz * vz);
+    //         momentum_x += mass * vx;
+    //         momentum_y += mass * vy;
+    //         heating_energy += temp;
 
-    if (abs(final_metrics->mom_x_change) > mom_change_threshold) {
-        cout << "Momentum change (x) (" << final_metrics->mom_x_change * 100 << "%) exceeds threshold of "
-                  << mom_change_threshold * 100 << "%" << endl;
-    } else {
-        cout << "Momentum change (x) (" << final_metrics->mom_x_change * 100 << "%) within threshold of "
-                  << mom_change_threshold * 100 << "%" << endl;
-    }
+    //     }
 
-    if (abs(final_metrics->mom_y_change) > mom_change_threshold) {
-        cout << "Momentum change (y) (" << final_metrics->mom_y_change * 100 << "%) exceeds threshold of "
-                  << mom_change_threshold * 100 << "%" << endl;
-    } else {
-        cout << "Momentum change (y) (" << final_metrics->mom_y_change * 100 << "%) within threshold of "
-                  << mom_change_threshold * 100 << "%" << endl;
-    }
+    //     // Calculate potential energy for each unique pair of particles
+    //     for (int j = 0; j < particle_count; j++) {
+    //         for (int k = j + 1; k < particle_count; k++) {
+    //             high_prec dx = particles->particle_list[j]->x - particles->particle_list[k]->x;
+    //             high_prec dy = particles->particle_list[j]->y - particles->particle_list[k]->y;
+    //             high_prec dz = particles->particle_list[j]->z - particles->particle_list[k]->z;
+    //             high_prec distance = sqrt(dx * dx + dy * dy + dz * dz);
+    //             potential_energy += -6.674e-11 * particles->particle_list[j]->m * particles->particle_list[k]->m / distance;
+    //         }
+    //     }
+
+    //     // Store calculated values in metrics
+    //     shared_ptr<test_metrics_t> metrics = particle_states->metrics[i];
+    //     metrics->KE = kinetic_energy;
+    //     metrics->PE = potential_energy;
+    //     metrics->TE = kinetic_energy + potential_energy + heating_energy;
+    //     metrics->mom_x = momentum_x;
+    //     metrics->mom_y = momentum_y;
+    //     metrics->HE = heating_energy;
+
+    //     // Calculate relative changes from the initial snapshot
+    //     if (i == 0) {
+    //         metrics->TE_change = 0.0;
+    //         metrics->mom_x_change = 0.0;
+    //         metrics->mom_y_change = 0.0;
+    //     } else {
+    //         high_prec initial_TE = particle_states->metrics[0]->TE;
+    //         high_prec initial_mom_x = particle_states->metrics[0]->mom_x;
+    //         high_prec initial_mom_y = particle_states->metrics[0]->mom_y;
+
+    //         metrics->TE_change = (metrics->TE - initial_TE) / initial_TE;
+    //         // metrics->mom_x_change = (initial_mom_x != 0) ? (momentum_x - initial_mom_x) / initial_mom_x : high_prec(0.0);
+    //         // metrics->mom_y_change = (initial_mom_y != 0) ? (momentum_y - initial_mom_y) / initial_mom_y : high_prec(0.0);
+
+    //         // NEW (FIXED):
+    //         metrics->mom_x_change = (fabs(initial_mom_x) > 1e-12) ? (momentum_x - initial_mom_x) / initial_mom_x : high_prec(0.0);
+    //         metrics->mom_y_change = (fabs(initial_mom_y) > 1e-12) ? (momentum_y - initial_mom_y) / initial_mom_y : high_prec(0.0);
+
+    //         //calculate the current TE versus the TE of the previous step. Call it margin_TE_error
+    //         //high_prec prev_TE = particle_states->metrics[i - 1]->TE;
+    //         //high_prec margin_TE_error = metrics->TE - prev_TE;
+    //         //metrics->margin_TE_error = margin_TE_error;
+
+
+    //     }
+
+    //     // Cumulative TE error over time
+    //     if (i > 0) {
+    //         high_prec prev_TE_error = particle_states->metrics[i - 1]->TE_error;
+    //         high_prec te_error = metrics->TE - particle_states->metrics[i - 1]->TE;
+    //         metrics->TE_error = prev_TE_error + te_error;
+    //         metrics->relative_error = metrics->TE_error / particle_states->metrics[0]->TE;
+    //     } else {
+    //         metrics->TE_error = 0.0;
+    //         metrics->relative_error = 0.0;
+    //     }
+    // }
+
+    // // Check thresholds for final snapshot
+    // shared_ptr<test_metrics_t> final_metrics = particle_states->metrics.back();
+    // if (abs(final_metrics->relative_error) > TE_error_threshold) {
+    //     //cout << "Total Energy Error (" << final_metrics->relative_error * 100 << "%) exceeds threshold of "
+    //     //          << TE_error_threshold * 100 << "%" << endl;
+    // } else {
+    //     //cout << "Total Energy Error (" << final_metrics->relative_error * 100 << "%) within threshold of "
+    //     //          << TE_error_threshold * 100 << "%" << endl;
+    // }
+
+    // if (abs(final_metrics->mom_x_change) > mom_change_threshold) {
+    //     cout << "Momentum change (x) (" << final_metrics->mom_x_change * 100 << "%) exceeds threshold of "
+    //               << mom_change_threshold * 100 << "%" << endl;
+    // } else {
+    //     cout << "Momentum change (x) (" << final_metrics->mom_x_change * 100 << "%) within threshold of "
+    //               << mom_change_threshold * 100 << "%" << endl;
+    // }
+
+    // if (abs(final_metrics->mom_y_change) > mom_change_threshold) {
+    //     cout << "Momentum change (y) (" << final_metrics->mom_y_change * 100 << "%) exceeds threshold of "
+    //               << mom_change_threshold * 100 << "%" << endl;
+    // } else {
+    //     cout << "Momentum change (y) (" << final_metrics->mom_y_change * 100 << "%) within threshold of "
+    //               << mom_change_threshold * 100 << "%" << endl;
+    // }
 
 
 
     
 
-    // Calculate the rolling average by considering the last `fps_smoothing_window` frames
-    int fps_smoothing_window = static_cast<int>(30 / dt);  // Number of frames to consider for smoothing
-    for (int i = 0; i < particle_states->metrics.size(); i++) {
-        high_prec avg_fps = 0;
-        int count = 0;
+    // // Calculate the rolling average by considering the last `fps_smoothing_window` frames
+    // int fps_smoothing_window = static_cast<int>(30 / dt);  // Number of frames to consider for smoothing
+    // for (int i = 0; i < particle_states->metrics.size(); i++) {
+    //     high_prec avg_fps = 0;
+    //     int count = 0;
         
-        for (int j = i; j >= 0 && j > i - fps_smoothing_window; j--) {
-            avg_fps += particle_states->metrics[j]->fps;
-            count++;
-        }
-        // Update the FPS with the averaged value for smoother data
-        particle_states->metrics[i]->fps = avg_fps / count;
+    //     for (int j = i; j >= 0 && j > i - fps_smoothing_window; j--) {
+    //         avg_fps += particle_states->metrics[j]->fps;
+    //         count++;
+    //     }
+    //     // Update the FPS with the averaged value for smoother data
+    //     particle_states->metrics[i]->fps = avg_fps / count;
 
-        //print the value of margin_TE_error for step i
+    //     //print the value of margin_TE_error for step i
 
-        //cout << "Margin TE error for step " << i << " : " << particle_states->metrics[i]->margin_TE_error << endl;
-    }
+    //     //cout << "Margin TE error for step " << i << " : " << particle_states->metrics[i]->margin_TE_error << endl;
+    // }
 
     // Placeholder: If metrics is a null pointer, create a new metrics object and fill with zeros
     if (particle_states->metrics.size() == 0) {

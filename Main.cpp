@@ -19,21 +19,19 @@ using namespace std;
 
 int main() {
 
-    cout << "DEBUG: Starting main..." << endl;
-
     //1. initialize the model
     ParticleModel model;
-    cout << "DEBUG: Model created" << endl;
-    cout << "DEBUG: Engine address: " << model.engine.get() << endl;
     
     //2. select the scenario
     shared_ptr<scenario> selected_scenario = model.interfacer->select_scenario();
-    cout << "DEBUG: Scenario selected" << endl;
+
     //3. run the model
     shared_ptr<snapshots> particle_states;
 
     //3a. Run from cache if allowed
     if(selected_scenario->try_cache && model.engine->cache_exists(selected_scenario)) {
+
+        cout << "Loading scenario from cache..." << endl;
 
        particle_states = model.engine->run_from_cache(selected_scenario);
 
@@ -43,8 +41,6 @@ int main() {
         //3b.1. render and store the objects at t0
 
         shared_ptr<Particles> particles = model.obj_handler-> process_objs(selected_scenario);
-        cout << "DEBUG: Particles processed, calling engine->run..." << endl;
-        cout << "DEBUG: Engine address before run: " << model.engine.get() << endl;
 
 
         //3b.2. run the model
@@ -54,20 +50,16 @@ int main() {
 
     //4. validate the simulation and generate metrics
 
-    particle_states = model.metrics->compute_metrics(selected_scenario, particle_states);
+    //particle_states = model.metrics->compute_metrics(selected_scenario, particle_states);
 
-    int returnCode = system(
-        
-        R"(C:\\Users\\smdw1\\anaconda3\\python.exe C:\\Users\\smdw1\\OneDrive\\Bureaublad\\Development\\Projects\\cpp\\ParticleSimulator2\\Misc\\Energy_plots\\main.py)"
-
-    );
-
-    if (returnCode == 0) {
-        cout << "Python script executed successfully." << endl;
-    } else {
-        cout << "Python script failed to execute." << endl;
+    if (selected_scenario->save_obj != "FALSE") {
+        //save the last particle state as a complex object
+        shared_ptr<Particles> final_state = particle_states->snaps.back();
+        model.obj_handler->state_to_cache(final_state, selected_scenario->save_obj);
     }
 
+
+    
     //5. visualize the model results using the snapshots
     model.plotter->plot_run(selected_scenario, particle_states);
 

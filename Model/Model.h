@@ -7,7 +7,7 @@
 
 // Internal libraries
 #include "include/Interfacer.h"
-#include "include/PhysEngine.h"
+#include "include/PhysEngineWrapper.h"   // CHANGED: wrapper header (not core)
 #include "include/PhysMetrics.h"
 #include "include/ParticlePlotter.h"
 #include "include/ObjHandler.h"
@@ -23,17 +23,12 @@ public:
     // Destructor
     ~ParticleModel();
 
-
     // Submodels
     unique_ptr<Interfacer> interfacer;
-    unique_ptr<Engine> engine;
+    unique_ptr<Engine> engine;    // CHANGED: wrapper type
     unique_ptr<Metrics> metrics;
     unique_ptr<Plotter> plotter;
     unique_ptr<ObjHandler> obj_handler;
-    
-
-
 };
 
 #endif // PARTICLEMODEL_H
-
