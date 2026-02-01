@@ -26,7 +26,7 @@ The elements below are to be recycled from ParticleSimulator1, in accordance wit
 *	Kinetic Collission function (including detection, backtracking and resolution) [DONE]
 *	Complex object generation (sphere only is OK) (including storage of complex object) [DONE]
 *	GNUplot plotting engine [DONE]
-*	Kinetic energy, momentum, fps trackers 
+*	Kinetic energy, momentum, fps trackers [DONE]
 
 ## Project structure
 
@@ -34,39 +34,71 @@ The elements below are to be recycled from ParticleSimulator1, in accordance wit
 
 Header files:
 * ObjHandler.h : this will contain all functionality in generating, saving and unpacking complex objects
-* PhysEngine.h: this will initialize the simulation, run through the timesteps, update particle locations and save Particle information & meta information (fps etc) at the end of the simulation
-* ParticlePlotter.h: this will set up the plotting engine and plot particles for every timestep
+* PhysEngineWrapper.h: this will initialize the simulation, run through the timesteps, measure energy and time differences with benchmark
+* PhysEngineCore.h: for a given timestep, this file will handle parameter choices, collissions, integration, update particle locations and save Particle information & meta information at the end of the simulation. 
+* ParticlePlotter.h: this will set up the plotting engine and plot particles for every timestep, it will also assign RGB values conditional on temperature.
 * Interfacer.h: this will read the input parameters, define scenarios and allow the user to choose which scenario to run.
 * Particles.h: this will define the individual, grouped and time-variant grouped particles and meta information per timestep.
 * PhysMetrics.h: this will define all functionality related to the validation (Both physics and efficiency related) metrics.
-* Utils.h: this will contain all math heavy functions  called upon by PhysEngine 
+* MathUtils.h: this will contain all math heavy functions  called upon by PhysEngine 
 
 Source files:
 * ObjHandler.cpp
-* PhysEngine.cpp
+* PhysEngineWrapper.cpp
+* PhysEngineCore.cpp
 * ParticlePlotter.cpp
 * Interfacer.cpp
 * PhysMetrics.cpp
 * Particles.cpp
-* Utils.cpp
+* MathUtils.cpp
 
 
 ## DevNotes
 
-Update (25/1):
+Notes (01/02/26)
+Following much headaches the physics engine now is able to run simulations based on inelastic collissions with a moderate complexity (n=60). Looking back on my C++ journey, I have started the initial work on ParticleSimulator1 (which was limited to kinetic interactions and ignored gravity) 1 year and 10 months ago. Reflecting back on this, I would say that I did learn basic C++ concept more towards the beginning of the project, but learning shifted almost completely away from this in the last year, towards grasping of geometry, basic physics principles and a bit of visual/game development. As an example, initially I had to engage on broad goals, plotting of particles, reading of input files, separation in header/source files etc, while more recently I focussed exclusively on different ways to deal with overlap resolution. Both are good learning, but in the next stage of the project (see below in next steps) I will work on computational efficiency, which should bring me back to the computer science/C++ side of learning. Below I will discuss in order 1) recap of the inelastic issue and eventual fix, 2) lessons learned, 3) Next steps.
 
-After working on and off for the last 4 months on this project, I managed to get inelastic collissions working, so that particles behave in a physically realistic way (clumping together while retaining linear and angular momentum) and converting KE to heat, which shows visually as particles brightening. An issue I was not able to solve is that seemingly, energy is created from nothing. I will take a break (though not abandon just yet) from this project to focus on my mathematics learning (MST125 at Open University) and perhaps start another python/c++ sideproject. 
+Issue & Fix (01/02/26)
+Gravity in each time step will attract particles. For perfectly elastic collissions, each overlap corresponds with an immediate rebounce, hence naive overlap corrections were fine. For imperfectly elastic particles however, this rebounce doesn't happen, hence overlaps will occur in each timesteps and hence any errors introduced by overlap corrections explode over time. I struggled months with how to properly handling overlap correction, with the constraint that any correction needs to respect the conservation of energy. The ultimate solution is to not separate overlap resolution and collission resolution, and simply handle overlap resolution as part of collissions. The core change to do so is when two particles overlap, to introduce an extra outwards velocity component which is larger depending on the size of the overlap. The drawback is that a parameter is to be selected on how strong this bias is. A too large bias seems to give visual appearance of elasticity (which shouldnt be for inelastic particles), while a too small one leads to overlaps growing larger. 0.5 seems to be a good value balancing both for a range of mass values (more mass is more gravity, hence requiring a higher parameter). As a result, benchmark simulations for perfectly inelastic particles now have energy errors well under 1%, which means this topic is closed off. See for a proof of the results the file in this branche: proofofconcept01-02-26.gif.
+
+Looking back at it, there are 3 components leading to this happy (though dragged out) resolution: 1) introduction of a clear benchmark and for each change testing again against this benchmark. This avoids solving one problem and creating 2 new ones, which especially in AI assisted programming is an endemic issue 2) I first encountered this issue exactly one year ago, hence AI has improved significantly. 3) I worked with 2 different freelancers through Fiverr (more on that below), which while it provided mixed results allowed some mistakes to float up and be fixed. 
+
+
+Lessons Learned (01/02/26).
+
+-Managerial side
+
+
+-time spent ROI, burnout & taking breaks
+
+
+
+Next Steps (01/02/26)
+Major:
+* 3 benchmarks "Planet + Moon System" has been created for different simulation lengths, ranging from 5 hours to 2 minutes and stored for each energy error and runtime in a benchmark. As I am comfortable with the Physics being correct, next I want to get rid of any efficiencies in the code that slow down the simulation, measuring for each change improvements in runtime (and ensure no new energy errors are introduced!). As I was not at all focussed on computational efficiency in my own work, prompts to AI and Fiverr collaborations I do expect there should be some low hanging fruits. Definition of success is at least a 80% reduction in computation time. To be scientifically rigourous I should run simulations multiple times to get a stable average simulation time, but at this stage this seems overkill.
+
+Minor:
+* Better handling of RGB values. Currently very slow and visually not appealing. In essence, I want to have no change in colour with mild heating and only large heating should give a visual cue. (Think a brown orb, impacted and the particles on the side of impact should become bright/reddish).
+* Simulation outcomes can now be loaded as objects, which allows iterative construction of more complex objects. This is necessary to create multi-particle objects such as planets, as it is (in my understanding) an unsolved problem in mathematics how many smaller circles fit into a larger one, hence allowing gravity to do its work acts as a numerical solver to this packing problem. A change that would make this more useful is if I can edit the (system) velocities & positions of these objects in the same interface as for new objects.
+
+
+
+
+
+
 
 Next steps (25/1/25)
 My best guesses is that the issue of increasing energy is that this has something to do with overlap resolution  An issue I was not able to solve is that seemingly, energy is created from nothing once particles are collided (leading to disintegration of the system). My best guesses is that this has something to do with overlap resolution 
 Possible next steps to look into a solution is to investigate why it seems that after some time a 2-body inelastic colliding system seems to converge and not build up additional energy. Another clue is that this convergence seems to happen much later when the timestep is smaller. I would guess that the way I correct for energy difference after geometrically separating particles has issues in the math. Two alternative things to explore is if the issue is numeral inaccuracy (particle structure is still double datatype even though calculations are almost all high_prec datatype) or a wrong order of overlap resolution, collission resolution and verlet integration. (see .PNG for illustration, note the initial drop is expected due to conversion of KE to HE).
 
+After working on and off for the last 4 months on this project, I managed to get inelastic collissions working, so that particles behave in a physically realistic way (clumping together while retaining linear and angular momentum) and converting KE to heat, which shows visually as particles brightening. An issue I was not able to solve is that seemingly, energy is created from nothing. I will take a break (though not abandon just yet) from this project to focus on my mathematics learning (MST125 at Open University) and perhaps start another python/c++ sideproject. 
+
 Next steps (29/9/24):
 *	Complex object rendering, Saving and retrieving from cache (conditional on cache param in scenario specified). Support for circle only is fine [DONE]
         should include manual inputs into complex name groups "with group defined particles are rendered from the same complex object" to allow for easier user input. Satisfies the GUI criteria for the project. [DONE]
         4/10: Would be nice to have GUI on 1/3 of screen and plot on 2/3 of screen.
-* Validation of momentum and kinetic energy conservation
-* number of particles, fps tracker on the plot handled through the metrics and plotter classes
+* Validation of momentum and kinetic energy conservation [DONE]
+* number of particles, fps tracker on the plot handled through the metrics and plotter classes [DONE]
 
 Notes (24/10/24): 
 * Lost 2 days of work due to a deleting some files. Managed to recover but teaches the valuable lesson to push small incremental changes to git instead of everything at once.
