@@ -11,12 +11,12 @@ This project aims to improve upon the lessons learned from ParticleSimulator1. T
 *	Separate code in header and source files [Done]
 *	Use classes instead of structs - 29/9: Classes seem to differ mostly in access rights and are only usefull when I learn about inheritance and polymorphism. I will stick to structs for now. [Abandoned]
 *	Use smart pointers. Each particle should only be defined once. -29/9: Smart pointers used but confusion on when to use unique_ptr and when to use shared_ptr. [DONE]
-*	Implement a quadtree (store the O(n^n) design for comparison)  - 29/9: NOT IMPLEMENTED. 24/10: Needs some consideration whether all key components (overlap resolution, collission detection, velocity verlet integration are compatible)
+*	Implement a quadtree (store the O(n^n) design for comparison)  - 29/9: NOT IMPLEMENTED. 24/10: Needs some consideration whether all key components (overlap resolution, collission detection, velocity verlet integration are compatible) -6/2/25: collission detection gets a paralel grid method to speed up overlap detection?
 
 ### Secondary objectives
 
 * Loading of objects/run, user interface to navigate options, using .csv instead of .txt - 29/9: csv implemented, changing parameters is much user friendlier now.(see devnotes) [DONE]
-*	Implement a simple helper function that can be wrapped around any function and prints run time to measure efficiency
+*	Implement a simple helper function that can be wrapped around any function and prints run time to measure efficiency [Done]
 *	Allow for particle radius and particle mass to be individualized - 29/9: physics seem reasonable but not validated yet [DONE]
 *	Separate computation and play-back of simulations - [DONE]
 
