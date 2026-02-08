@@ -55,6 +55,18 @@ Source files:
 
 ## DevNotes
 
+### Notes (08/02/26)
+Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. For evidence, see proofofconcept01-02-26.gif.
+
+Some secondary changes
+* RGB assignment is reworked. Now it should give more apparant heating visuals as is shown in the POC. Choosing the right parameters for most appealing/informative visual seems to be more of an art.
+* Due to n>1k, GNUPlotter was struggling with visualisation. Plotter is now made more efficient and can skip frames in a more customizable way. Still slightly jittery plotting, but this has no bearing on the actual simulated events so is not a priority as of now.
+
+Lessons learned:
+* Some time (2.5h) was lost on git versioning problems. Lesson learned is to always keep sufficient additional backups and when a problem arrises on git, to not deprioritize in favour of more interesting work.
+* Each run has a different execution time, and even with 6 runs, there is still a considerable variation due to other processes running/clocking times. A robust approach would need to test each change multiple times and have a null-hypothesis of there not being a significant improvement. Only when this hypothesis can be rejected should the change be kept.
+For measurement of computational gains for which 10x speed ups are expected, a robust approach is not needed and can be eye-balled. For expected gains of 1.5x speedups, it is sufficient to take the average time of a handful of runs (say 6). Where optimizations of 1.2x or less are under consideration, a robust and standardized approach would be necessary. Using the above rules of thumb, I only kept optimizations that gave >1.5x improvements.
+
 ### Notes (01/02/26)
 Following much headaches the physics engine now is able to run simulations based on inelastic collissions with a moderate complexity (n=60). Looking back on my C++ journey, I have started the initial work on ParticleSimulator1 (which was limited to kinetic interactions and ignored gravity) 1 year and 10 months ago. Reflecting back on this, I would say that I did learn basic C++ concept more towards the beginning of the project, but learning shifted almost completely away from this in the last year, towards grasping of geometry, basic physics principles and a bit of visual/game development. As an example, initially I had to engage on broad goals, plotting of particles, reading of input files, separation in header/source files etc, while more recently I focussed exclusively on different ways to deal with overlap resolution. Both are good learning, but in the next stage of the project (see below in next steps) I will work on computational efficiency, which should bring me back to the computer science/C++ side of learning. Below I will discuss in order 1) recap of the inelastic issue and eventual fix, 2) lessons learned, 3) Next steps.
 
@@ -74,11 +86,11 @@ Looking back, I spent hundreds of hours on this project, which gave me a lot of 
 Next Steps (01/02/26)
 
 Major:
-* 3 benchmarks "Planet + Moon System" has been created for different simulation lengths, ranging from 5 hours to 2 minutes and stored for each energy error and runtime in a benchmark. As I am comfortable with the Physics being correct, next I want to get rid of any efficiencies in the code that slow down the simulation, measuring for each change improvements in runtime (and ensure no new energy errors are introduced!). As I was not at all focussed on computational efficiency in my own work, prompts to AI and Fiverr collaborations I do expect there should be some low hanging fruits. Definition of success is at least a 80% reduction in computation time. To be scientifically rigourous I should run simulations multiple times to get a stable average simulation time, but at this stage this seems overkill.
+* 3 benchmarks "Planet + Moon System" has been created for different simulation lengths, ranging from 5 hours to 2 minutes and stored for each energy error and runtime in a benchmark. As I am comfortable with the Physics being correct, next I want to get rid of any efficiencies in the code that slow down the simulation, measuring for each change improvements in runtime (and ensure no new energy errors are introduced!). As I was not at all focussed on computational efficiency in my own work, prompts to AI and Fiverr collaborations I do expect there should be some low hanging fruits. Definition of success is at least a 80% reduction in computation time. To be scientifically rigourous I should run simulations multiple times to get a stable average simulation time, but at this stage this seems overkill. [DONE, 500,000% improvement, well over target]
 
 Minor:
-* Better handling of RGB values. Currently very slow and visually not appealing. In essence, I want to have no change in colour with mild heating and only large heating should give a visual cue. (Think a brown orb, impacted and the particles on the side of impact should become bright/reddish).
-* Simulation outcomes can now be loaded as objects, which allows iterative construction of more complex objects. This is necessary to create multi-particle objects such as planets, as it is (in my understanding) an unsolved problem in mathematics how many smaller circles fit into a larger one, hence allowing gravity to do its work acts as a numerical solver to this packing problem. A change that would make this more useful is if I can edit the (system) velocities & positions of these objects in the same interface as for new objects.
+* Better handling of RGB values. Currently very slow and visually not appealing. In essence, I want to have no change in colour with mild heating and only large heating should give a visual cue. (Think a brown orb, impacted and the particles on the side of impact should become bright/reddish). [DONE]
+* Simulation outcomes can now be loaded as objects, which allows iterative construction of more complex objects. This is necessary to create multi-particle objects such as planets, as it is (in my understanding) an unsolved problem in mathematics how many smaller circles fit into a larger one, hence allowing gravity to do its work acts as a numerical solver to this packing problem. A change that would make this more useful is if I can edit the (system) velocities & positions of these objects in the same interface as for new objects. [DONE]
 
 
 ### Next steps (25/1/25)
