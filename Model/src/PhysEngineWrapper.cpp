@@ -22,24 +22,32 @@ using namespace std::chrono;
 using StepEnergyTrace = EngineCore::StepEnergyTrace;
 
 static inline double safe_double_from_high_prec(const high_prec& v) {
-    try { return v.convert_to<double>(); }
-    catch (...) { return std::numeric_limits<double>::infinity(); }
+    return v;
 }
-static inline double to_double(const high_prec& v) { return safe_double_from_high_prec(v); }
+static inline double to_double(const high_prec& v) { return v; }
 
-static inline high_prec abs_hp(high_prec v) { return v < high_prec(0) ? -v : v; }
+static inline high_prec abs_hp(high_prec v) { return v < 0.0 ? -v : v; }
 
 static inline high_prec safe_rel_error(high_prec post, high_prec pre) {
     high_prec diff = post - pre;
-    if (pre == high_prec(0)) return diff;
+    if (pre == 0.0) return diff;
     return diff / pre;
 }
 
 // =======================
-// OPTIONAL STEP REPORTING
+// DEBUG & REPORTING CONFIG
 // =======================
+static const bool kDebugMode           = false;  // Toggle energy tracing and stage-wise error accumulation
 static const bool kReportEnergyPerStep = false;
 static const int  kStepPauseInterval   = 100;
+
+// =======================
+// CACHE CONFIG
+// =======================
+static const int  kCacheWriteEveryN    = 1;     // Save every Nth snapshot to cache (1 = all)
+static const bool kSaveScenario        = false; // Save simulation states to cache file
+
+bool Engine::debug_mode() { return kDebugMode; }
 
 static inline void pause_for_user() {
     std::cout << "Press enter to continue..." << std::endl;
@@ -100,24 +108,23 @@ static inline void print_step_report(
     line('=');
 }
 
-
 // Equality threshold for comparing CURRENT vs BENCHMARK error (relative difference), default 0.05%.
-static const high_prec kBenchmarkEqualRelThreshFrac = high_prec("0.0005"); // 0.05% = 0.0005 fraction
+static const high_prec kBenchmarkEqualRelThreshFrac = 0.0005; // 0.05% = 0.0005 fraction
 // If benchmark is exactly 0, treat "equal" as absolute current error <= 0.05% (in percent units)
-static const high_prec kBenchmarkEqualAbsThreshPct  = high_prec("0.05");
+static const high_prec kBenchmarkEqualAbsThreshPct  = 0.05;
 
 // Benchmarks stored as TOTAL RELATIVE TE ERROR IN PERCENT (|ΔTE|/|TE0| * 100).
 // Scenario keys match scenario->name exactly (as before splitting).
 static const std::unordered_map<std::string, high_prec> kBenchmarkTotalTEErrorPct = {
-    {"Planet + Moon System", high_prec("0.000012043152104")},
-    {"Planet + Moon System_short",  high_prec("0.001522")},
-    {"Planet + Moon System_shorter", high_prec("0.000000092628923")}
+    {"Planet + Moon System", 0.000012043152104},
+    {"Planet + Moon System_short",  0.001522},
+    {"Planet + Moon System_shorter", 0.000000092628923}
 };
 
 static const std::unordered_map<std::string, high_prec> kBenchmarkSimTimeSec = {
-    {"Planet + Moon System", high_prec("4.513e+04")},
-    {"Planet + Moon System_short",  high_prec("1292.951344")},
-    {"Planet + Moon System_shorter", high_prec("184.122661")}
+    {"Planet + Moon System", 4.513e+04},
+    {"Planet + Moon System_short",  1292.951344},
+    {"Planet + Moon System_shorter", 184.122661}
 };
 
 static inline bool lookup_benchmark_te_error_pct(const std::string& scenario_name, high_prec& out_benchmark_pct) {
@@ -151,19 +158,19 @@ static inline void print_benchmark_comparison_report(
     };
 
     std::string verdict;
-    bool have_rel = (benchmark_err_pct != high_prec(0));
+    bool have_rel = (benchmark_err_pct != 0.0);
     high_prec rel_diff_frac = 0;   // (current - benchmark) / benchmark
     high_prec rel_diff_pct  = 0;   // rel_diff_frac * 100
 
     if (have_rel) {
         rel_diff_frac = (current_err_pct - benchmark_err_pct) / benchmark_err_pct;
-        rel_diff_pct  = rel_diff_frac * high_prec(100);
+        rel_diff_pct  = rel_diff_frac * 100.0;
         if (abs_hp(rel_diff_frac) <= equal_rel_thresh_frac) verdict = "EQUAL ERROR";
         else if (current_err_pct > benchmark_err_pct)       verdict = "WORSE ERROR";
         else                                                verdict = "BETTER ERROR";
     } else {
         if (abs_hp(current_err_pct) <= equal_abs_thresh_pct) verdict = "EQUAL ERROR";
-        else if (current_err_pct > high_prec(0))             verdict = "WORSE ERROR";
+        else if (current_err_pct > 0.0)             verdict = "WORSE ERROR";
         else                                                 verdict = "BETTER ERROR";
     }
 
@@ -178,7 +185,7 @@ static inline void print_benchmark_comparison_report(
 
     if (have_rel) {
         std::cout << "Relative diff vs bench : " << rel_diff_pct << " %"
-                  << "   (equal if |diff| <= " << (equal_rel_thresh_frac * high_prec(100)) << " %)\n";
+                  << "   (equal if |diff| <= " << (equal_rel_thresh_frac * 100.0) << " %)\n";
     } else {
         std::cout << "Relative diff vs bench : N/A (benchmark == 0)\n";
         std::cout << "Equal threshold (abs)  : " << equal_abs_thresh_pct << " %\n";
@@ -198,9 +205,7 @@ static inline void print_benchmark_comparison_report(
         std::cout << "Benchmark time (s)     : " << benchmark_time_sec << "\n";
         std::cout << "Current time (s)       : " << current_time_sec << "\n";
         std::cout << "Relative diff vs bench : "
-                  << ((current_time_sec - benchmark_time_sec) / benchmark_time_sec * high_prec(100)) << " %\n";
-
-
+                  << ((current_time_sec - benchmark_time_sec) / benchmark_time_sec * 100.0) << " %\n";
     } else {
         std::cout << "No benchmark entry found for sim time.\n";
         std::cout << "Current time (s)       : " << current_time_sec << "\n";
@@ -210,14 +215,48 @@ static inline void print_benchmark_comparison_report(
 }
 
 // =======================
+// LIGHTWEIGHT SNAPSHOT (MINIMAL FIELDS COPY)
+// =======================
+static inline unique_ptr<Particles> make_light_snapshot(const Particles& src) {
+    auto dst = make_unique<Particles>();
+
+    const size_t n = src.particle_list.size();
+    dst->particle_list.resize(n);
+
+    for (size_t j = 0; j < n; ++j) {
+        if (!dst->particle_list[j]) dst->particle_list[j] = make_shared<Particle>();
+
+        const auto& sp = src.particle_list[j];
+        if (!sp) continue;
+
+        auto& dp = dst->particle_list[j];
+
+        dp->particle_id = sp->particle_id;
+        dp->r    = sp->r;
+        dp->g    = sp->g;
+        dp->b    = sp->b;
+        dp->x    = sp->x;
+        dp->y    = sp->y;
+        dp->z    = sp->z;
+        dp->vx   = sp->vx;
+        dp->vy   = sp->vy;
+        dp->vz   = sp->vz;
+        dp->m    = sp->m;
+        dp->rad  = sp->rad;
+        dp->temp = sp->temp;
+        dp->rest = sp->rest;
+    }
+
+    return dst;
+}
+
+// =======================
 // RUN
 // =======================
 shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
 {
-
     //set core physics parameters
     core.set_overlap_beta(scenario);
-
 
     // Reset run-level counters (wrapper-side)
     high_prec total_TE_error_overlap   = 0;
@@ -236,48 +275,79 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     // dt is configured in core (restored single call point)
     core.configure_dt(scenario, particles);
 
+    // Match plotter display stride: plotter steps by (int)(1/dt), so only snapshot that often
+    const int write_k_frames = std::max(1, static_cast<int>(1.0 / scenario->dt));
+
     high_prec steps_db = scenario->time / scenario->dt;
     int steps = static_cast<int>(steps_db);
     cout << "Number of steps to be simulated: " << steps << endl << endl;
 
-    particle_states->metrics.resize(steps, nullptr);
+    // Pre-allocate all metrics objects up-front (avoids per-step heap allocation)
+    particle_states->metrics.resize(steps);
+    for (int mi = 0; mi < steps; ++mi) {
+        particle_states->metrics[mi] = make_shared<test_metrics_t>();
+    }
+    // Reserve approximate snapshot capacity to reduce reallocations
+    if (write_k_frames > 0) {
+        const int expected_snaps = (steps + write_k_frames - 1) / write_k_frames;
+        particle_states->snaps.reserve(static_cast<size_t>(expected_snaps));
+    }
 
     // Initial TE baseline for final reporting
     high_prec TE_initial = core.calc_TE(particles);
     high_prec TE_final   = TE_initial;
 
     EngineCore::clock_t::time_point sim_start = EngineCore::clock_t::now();
-    int last_reported_pct = -5;
+
+    // Progress reporting (5% buckets) with O(#reports) math
+    int last_reported_bucket = -5;
+    int next_report_bucket   = -1;
+    int next_report_step     = std::numeric_limits<int>::max();
+
+    if (steps > 0) {
+        cout << "0% of the simulation complete." << endl;
+        last_reported_bucket = 0;
+        next_report_bucket   = 5;
+        next_report_step     = (int)(((long long)steps * (long long)next_report_bucket + 99LL) / 100LL);
+        if (next_report_step < 1) next_report_step = 1;
+    }
 
     for (int i = 0; i < steps; i++) {
-        if (!particle_states->metrics[i]) {
-            particle_states->metrics[i] = make_shared<test_metrics_t>();
-        }
-
-        EngineCore::clock_t::time_point step_start = EngineCore::clock_t::now();
         EngineCore::update_iter = i;
 
-        StepEnergyTrace tr;
-        core.step(particles, &tr);
+        if (kDebugMode) {
+            StepEnergyTrace tr;
 
-        // Accumulate stage-wise TE deltas (signed)
-        total_TE_error_overlap   += tr.dE_overlap;
-        total_TE_error_collision += tr.dE_collision;
-        total_TE_error_verlet    += tr.dE_verlet;
-        TE_final = tr.TE3;
+            EngineCore::clock_t::time_point step_start_report;
+            EngineCore::clock_t::time_point step_end_report;
 
-        EngineCore::clock_t::time_point step_end = EngineCore::clock_t::now();
-        double step_seconds = EngineCore::seconds_between(step_start, step_end);
+            if (kReportEnergyPerStep) step_start_report = EngineCore::clock_t::now();
+            core.step(particles, &tr); // FIX: only step once in debug mode
+            if (kReportEnergyPerStep) step_end_report = EngineCore::clock_t::now();
 
-        if (kReportEnergyPerStep) {
-            print_step_report(i, steps, tr, step_seconds);
-            if (kStepPauseInterval > 0 && ((i + 1) % kStepPauseInterval == 0)) {
-                pause_for_user();
+            // Accumulate stage-wise TE deltas (signed)
+            total_TE_error_overlap   += tr.dE_overlap;
+            total_TE_error_collision += tr.dE_collision;
+            total_TE_error_verlet    += tr.dE_verlet;
+
+            if (kReportEnergyPerStep) {
+                double step_seconds = EngineCore::seconds_between(step_start_report, step_end_report);
+                print_step_report(i, steps, tr, step_seconds);
+                if (kStepPauseInterval > 0 && ((i + 1) % kStepPauseInterval == 0)) {
+                    pause_for_user();
+                }
             }
+        } else {
+            // No debug mode: run without trace (no energy tracking overhead)
+            core.step(particles, nullptr);
         }
 
-        auto particles_copy = make_unique<Particles>(*particles);
-        particle_states->snaps.push_back(move(particles_copy));
+        if (write_k_frames > 0) {
+            const bool should_write = ((i + 1) % write_k_frames == 0) || (i == steps - 1);
+            if (should_write) {
+                particle_states->snaps.push_back(make_light_snapshot(*particles)); // FIX 1: lightweight copy
+            }
+        }
 
         particle_states->metrics[i]->margin_TE_error = core.get_margin_TE_error();
         //particle_states->metrics[i]->margin_TE_error_overlap   = core.get_margin_TE_error_overlap();
@@ -287,52 +357,50 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         //particle_states->metrics[i]->margin_TE_error_overlap_ij_transl = core.get_margin_TE_error_overlap_ij_transl();
         //particle_states->metrics[i]->margin_TE_error_overlap_ij_corrected = core.get_margin_TE_error_overlap_ij_corrected();
 
-        // progress reporting: 5% buckets
-        if (steps > 0) {
-            if (i == 0 && last_reported_pct < 0) {
-                cout << "0% of the simulation complete." << endl;
-                last_reported_pct = 0;
-            }
-
+        // progress reporting: 5% buckets (compute pct only when needed)
+        if (steps > 0 && (i + 1) >= next_report_step) {
             int pct_complete = (int)(((long long)(i + 1) * 100LL) / (long long)steps);
             if (pct_complete > 100) pct_complete = 100;
             if (pct_complete < 0) pct_complete = 0;
 
             int pct_bucket = (pct_complete / 5) * 5;
-            if (pct_bucket >= 0 && pct_bucket <= 100 && pct_bucket > last_reported_pct) {
+            if (pct_bucket >= 0 && pct_bucket <= 100 && pct_bucket > last_reported_bucket) {
                 cout << pct_bucket << "% of the simulation complete." << endl;
-                last_reported_pct = pct_bucket;
+                last_reported_bucket = pct_bucket;
             }
 
-            if (i == steps - 1 && last_reported_pct < 100) {
-                cout << "100% of the simulation complete." << endl;
-                last_reported_pct = 100;
+            next_report_bucket = last_reported_bucket + 5;
+            if (next_report_bucket > 100) {
+                next_report_step = std::numeric_limits<int>::max();
+            } else {
+                next_report_step = (int)(((long long)steps * (long long)next_report_bucket + 99LL) / 100LL);
+                if (next_report_step < (i + 2)) next_report_step = (i + 2); // keep it forward-moving
             }
         }
-
-        duration<double> time_taken = duration<double>(step_end - step_start);
-        particle_states->metrics[i]->fps = 1 / time_taken.count();
     }
 
     EngineCore::clock_t::time_point sim_end = EngineCore::clock_t::now();
     double total_seconds = EngineCore::seconds_between(sim_start, sim_end);
-    high_prec current_time_sec = high_prec(total_seconds);
+    high_prec current_time_sec = total_seconds;
+
+    // Calculate final TE once after all steps complete (2nd and final TE calculation)
+    TE_final = core.calc_TE(particles);
 
     // =======================
-    // END-OF-SIM LOGGING (RESTORED)
+    // END-OF-SIM LOGGING
     // =======================
     high_prec total_stage_sum = total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet;
     high_prec abs_stage_sum = abs_hp(total_TE_error_overlap) + abs_hp(total_TE_error_collision) + abs_hp(total_TE_error_verlet);
 
     auto pct_share = [&](high_prec part_abs) -> high_prec {
-        if (abs_stage_sum == high_prec(0)) return high_prec(0);
-        return (part_abs / abs_stage_sum) * high_prec(100);
+        if (abs_stage_sum == 0.0) return 0.0;
+        return (part_abs / abs_stage_sum) * 100.0;
     };
 
     high_prec dE_total = TE_final - TE_initial;
     high_prec dE_total_abs = abs_hp(dE_total);
     high_prec dE_total_rel = abs_hp(safe_rel_error(TE_final, TE_initial));
-    high_prec dE_total_rel_pct = dE_total_rel * high_prec(100); // total relative TE error (%)
+    high_prec dE_total_rel_pct = dE_total_rel * 100.0; // total relative TE error (%)
 
     cout << scenario->name << " simulation completed." << endl << endl;
     cout << "Steps: " << steps << endl;
@@ -343,10 +411,10 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     // legacy-style totals
     cout << "Total TE error (sum of parts): " << total_stage_sum << endl;
-    if (total_stage_sum != high_prec(0)) {
-        cout << "% overlap error:   " << (total_TE_error_overlap   / total_stage_sum) * high_prec(100) << endl;
-        cout << "% collision error: " << (total_TE_error_collision / total_stage_sum) * high_prec(100) << endl;
-        cout << "% verlet error:    " << (total_TE_error_verlet    / total_stage_sum) * high_prec(100) << endl;
+    if (total_stage_sum != 0.0) {
+        cout << "% overlap error:   " << (total_TE_error_overlap   / total_stage_sum) * 100.0 << endl;
+        cout << "% collision error: " << (total_TE_error_collision / total_stage_sum) * 100.0 << endl;
+        cout << "% verlet error:    " << (total_TE_error_verlet    / total_stage_sum) * 100.0 << endl;
     }
 
     // stage signed deltas + absolute share
@@ -367,12 +435,12 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     cout << "  |delta TE|: " << dE_total_abs << endl;
     cout << "  rel delta:  " << dE_total_rel << " (" << dE_total_rel_pct << "%)" << endl;
 
-    if (dE_total > high_prec(0))      cout << "ENERGY INCREASED" << endl;
-    else if (dE_total < high_prec(0)) cout << "ENERGY DECREASED" << endl;
+    if (dE_total > 0.0)      cout << "ENERGY INCREASED" << endl;
+    else if (dE_total < 0.0) cout << "ENERGY DECREASED" << endl;
     else                              cout << "ENERGY UNCHANGED" << endl;
 
     // =======================
-    // BENCHMARK COMPARISON (RESTORED)
+    // BENCHMARK COMPARISON 
     // =======================
     {
         high_prec bench_pct = 0;
@@ -407,7 +475,9 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         }
     }
 
-    run_to_cache(scenario, particle_states);
+    if (kSaveScenario) {
+        run_to_cache(scenario, particle_states);
+    }
     return particle_states;
 }
 
@@ -423,26 +493,62 @@ void Engine::run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> p
         return;
     }
 
-    file << "step_id, particle_id,r,g,b,x,y,z,vx,vy,vz,m,rad,temp,rest" << endl;
+    const int total_snaps = (int)particle_states->snaps.size();
+    const int n_particles = total_snaps > 0 ? (int)particle_states->snaps[0]->particle_list.size() : 0;
+    const int stride = std::max(1, kCacheWriteEveryN);
+    const int written_snaps = (total_snaps + stride - 1) / stride;
+    const double compression = total_snaps > 0 ? (1.0 - (double)written_snaps / total_snaps) * 100.0 : 0.0;
+    cout << "Writing " << written_snaps << "/" << total_snaps << " states for " << n_particles
+         << " particles" << std::fixed << std::setprecision(1) << "("
+         << compression << "% reduction)" << endl;
 
-    for (int i = 0; i < (int)particle_states->snaps.size(); i++) {
+    file << std::fixed << std::setprecision(15);
+    file << "step_id, particle_id,r,g,b,x,y,z,vx,vy,vz,m,rad,temp,rest\n";
+
+    int last_reported_bucket = -5;
+    int next_report_step = 0;
+    int written = 0;
+
+    for (int i = 0; i < total_snaps; i += stride) {
+        // 5% progress reporting (based on written count)
+        if (written_snaps > 0 && written >= next_report_step) {
+            int pct = (int)(((long long)(written + 1) * 100LL) / (long long)written_snaps);
+            int bucket = (pct / 20) * 20;
+            if (bucket > last_reported_bucket) {
+                cout << "  " << bucket << "%" << endl;
+                last_reported_bucket = bucket;
+            }
+            int nb = last_reported_bucket + 5;
+            next_report_step = (nb > 100) ? written_snaps + 1
+                : (int)(((long long)written_snaps * (long long)nb + 99LL) / 100LL);
+        }
+        ++written;
+
         for (int j = 0; j < (int)particle_states->snaps[i]->particle_list.size(); j++) {
-            file << std::fixed << std::setprecision(15)
-                << i << ","
-                << particle_states->snaps[i]->particle_list[j]->particle_id << ","
-                << (particle_states->snaps[i]->particle_list[j]->r) << ","
-                << (particle_states->snaps[i]->particle_list[j]->g) << ","
-                << (particle_states->snaps[i]->particle_list[j]->b) << ","
-                << (particle_states->snaps[i]->particle_list[j]->x) << ","
-                << (particle_states->snaps[i]->particle_list[j]->y) << ","
-                << (particle_states->snaps[i]->particle_list[j]->z) << ","
-                << (particle_states->snaps[i]->particle_list[j]->vx) << ","
-                << (particle_states->snaps[i]->particle_list[j]->vy) << ","
-                << (particle_states->snaps[i]->particle_list[j]->vz) << ","
-                << (particle_states->snaps[i]->particle_list[j]->m) << ","
-                << (particle_states->snaps[i]->particle_list[j]->rad) << ","
-                << (particle_states->snaps[i]->particle_list[j]->temp) << ","
-                << (particle_states->snaps[i]->particle_list[j]->rest) << endl;
+            const auto& p = particle_states->snaps[i]->particle_list[j];
+            
+            // Check for negative temperature before writing
+            // if (p->temp < 0) {
+            //     cout << "Negative temperature detected for particle " << p->particle_id
+            //          << " at step " << i << ". Pausing for user input." << endl;
+            //     pause_for_user();
+            // }
+            
+            file << i << ","
+                << p->particle_id << ","
+                << p->r << ","
+                << p->g << ","
+                << p->b << ","
+                << p->x << ","
+                << p->y << ","
+                << p->z << ","
+                << p->vx << ","
+                << p->vy << ","
+                << p->vz << ","
+                << p->m << ","
+                << p->rad << ","
+                << p->temp << ","
+                << p->rest << '\n';
         }
     }
 
@@ -473,7 +579,8 @@ shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
 
     string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15;
     int step_id = 0;
-    shared_ptr<Particles> particles = make_shared<Particles>();
+
+    unique_ptr<Particles> particles = make_unique<Particles>();
 
     in.read_header(io::ignore_extra_column, "step_id", "particle_id", "r", "g", "b", "x", "y", "z",
                    "vx", "vy", "vz", "m", "rad", "rest", "temp");
@@ -481,8 +588,8 @@ shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
     while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10,
                        col11, col12, col13, col14, col15)) {
         if (stoi(col1) != step_id) {
-            particle_states->snaps.push_back(particles);
-            particles = make_shared<Particles>();
+            particle_states->snaps.push_back(std::move(particles));
+            particles = make_unique<Particles>();
             step_id = stoi(col1);
         }
 
@@ -505,6 +612,6 @@ shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
         particles->particle_list.push_back(particle);
     }
 
-    particle_states->snaps.push_back(particles);
+    particle_states->snaps.push_back(std::move(particles));
     return particle_states;
 }

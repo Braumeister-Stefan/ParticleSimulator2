@@ -6,14 +6,15 @@
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
-#include <boost/multiprecision/cpp_dec_float.hpp>
 
 #include "../include/ParticlePlotter.h"
 #include "../include/InitStructs.h"
+#include "../include/PhysEngineWrapper.h"
 
 using namespace std;
 
-static const high_prec HEAT_GAMMA = 4;
+static const high_prec HEAT_GAMMA = 0.7;
+static const int kPlotSpeedMultiplier = 20; // 1 = normal, 2 = 2x, etc.
 
 FILE *gnuplotPipe = nullptr;
 
@@ -34,7 +35,10 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     init_GNU(scenario);
     plot_GNU(particle_states->snaps[0], particle_states->metrics[0]);
 
-    fprintf(gnuplotPipe, "set label 1 'Step: 0' at screen 0.01,0.01\n");
+    // Set N label once (particle count never changes)
+    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n",
+            static_cast<int>(particle_states->snaps[0]->particle_list.size()));
+    fprintf(gnuplotPipe, "set label 1 'Step: 0' at screen 0.01,0.95 textcolor rgb 'white'\n");
     fflush(gnuplotPipe);
 
     cout << "............................................" << endl;
@@ -44,17 +48,21 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     cin.ignore();
     cin.get();
 
-    int step = static_cast<int>(1.0 / static_cast<double>(scenario->dt));
+    int step = static_cast<int>(1.0 / static_cast<double>(scenario->dt)) * kPlotSpeedMultiplier;
     if (step < 1) step = 1;
+
+    int base_step = static_cast<int>(1.0 / static_cast<double>(scenario->dt));
+    if (base_step < 1) base_step = 1;
+    cout << "Playback: " << kPlotSpeedMultiplier << "x speed (step " << step << " vs base " << base_step << ")" << endl;
 
     const int n = static_cast<int>(particle_states->snaps.size());
     const int totalIters = (n + step - 1) / step; // how many loop iterations will run
 
     for (int i = 0; i < n; i += step) {
-        //cout << "Plotting step " << i + 1 << " / " << n << endl;
-
         int iter = i / step; // 0..totalIters-1
-        if (n >= 10 && (iter % (totalIters / 10) == 0)) {
+
+        int progressStep = totalIters / 10;
+        if (progressStep > 0 && (iter % progressStep == 0)) {
             cout << "Simulation " << (iter * 100) / totalIters << "% complete." << endl;
         }
 
@@ -71,24 +79,23 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 }
 void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps) {
 
-    // --- NEW: cutoff (fraction of max temp) + gamma ---
-    // Only temps above (min_temp + CUTOFF_FRAC * range) will affect brightness.
-    static const high_prec HEAT_CUTOFF_FRAC = high_prec("0.85"); 
-    static const high_prec HEAT_GAMMA_HP    = high_prec(HEAT_GAMMA); 
+    // Config: cutoff, gamma
+    static const high_prec HEAT_CUTOFF_FRAC   = 0.00; // no cutoff — full temp range
+    static const high_prec HEAT_GAMMA_HP      = HEAT_GAMMA;
 
     high_prec max_temp = 0.0;
+    high_prec min_temp = 0.0;
     for (int i = 0; i < static_cast<int>(snaps->snaps.size()); i++) {
         for (int j = 0; j < static_cast<int>(snaps->snaps[i]->particle_list.size()); j++) {
             high_prec t = snaps->snaps[i]->particle_list[j]->temp;
             if (t > max_temp) max_temp = t;
         }
     }
-
-    high_prec min_temp = 0.0;
     high_prec temp_range = max_temp - min_temp;
     if (temp_range <= 0.0) return;
 
-    // --- NEW: compute absolute cutoff temp ---
+    cout << "Max temp: " << max_temp << ", Min temp: " << min_temp << endl;
+
     high_prec cutoff_temp = min_temp + HEAT_CUTOFF_FRAC * temp_range;
     high_prec denom = (max_temp - cutoff_temp);
     if (denom <= 0.0) return;
@@ -98,21 +105,20 @@ void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps) {
 
             auto &p = snaps->snaps[i]->particle_list[j];
 
-            // --- NEW: map temps below cutoff to 0 (no visible change) ---
             high_prec fraction = 0.0;
             if (p->temp > cutoff_temp) {
-                fraction = (p->temp - cutoff_temp) / denom; // re-normalize into [0,1]
+                fraction = (p->temp - cutoff_temp) / denom;
                 if (fraction < 0.0) fraction = 0.0;
                 if (fraction > 1.0) fraction = 1.0;
 
-                // --- keep gamma, now applied only to the hot tail ---
-                fraction = boost::multiprecision::pow(fraction, HEAT_GAMMA_HP);
+                fraction = std::pow(fraction, HEAT_GAMMA_HP);
             }
 
-            // brighten toward white only for hot tail
-            p->r = p->r + (1.0 - p->r) * fraction;
-            p->g = p->g + (1.0 - p->g) * fraction;
-            p->b = p->b + (1.0 - p->b) * fraction;
+            // Hue shift toward red + 1/4 as brightening
+            high_prec brighten = fraction * 0.25;
+            p->r = p->r + (1.0 - p->r) * fraction + (1.0 - p->r) * brighten;
+            p->g = p->g * (1.0 - fraction) + (1.0 - p->g) * brighten;
+            p->b = p->b * (1.0 - fraction) + (1.0 - p->b) * brighten;
 
             if (p->r > 1.0) p->r = 1.0;
             if (p->g > 1.0) p->g = 1.0;
@@ -141,7 +147,7 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     fprintf(gnuplotPipe, "set yrange [-100:100]\n");
     fprintf(gnuplotPipe, "set size ratio -1\n");
     fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
-    fprintf(gnuplotPipe, "set terminal wxt background '#000000'\n");
+    fprintf(gnuplotPipe, "set terminal wxt noraise background '#000000'\n");
     fprintf(gnuplotPipe, "unset key\n");
 
     fflush(gnuplotPipe);
@@ -149,40 +155,54 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
 
 void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_t> metrics_t) {
 
-    fprintf(gnuplotPipe, "plot '-' with circles lc rgb variable\n");
+    // Batch all gnuplot commands into a single string to minimize pipe write syscalls
+    std::string buf;
+    buf.reserve(particles->particle_list.size() * 48 + 512);
 
+    buf += "plot '-' with circles lc rgb variable\n";
+
+    char line[128];
     for (int i = 0; i < static_cast<int>(particles->particle_list.size()); i++) {
-
-        float point_size = static_cast<float>(particles->particle_list[i]->rad);
-
-        fprintf(gnuplotPipe, "%f %f %f %d\n",
+        int len = snprintf(line, sizeof(line), "%f %f %f %d\n",
                 static_cast<float>(particles->particle_list[i]->x),
                 static_cast<float>(particles->particle_list[i]->y),
-                point_size,
+                static_cast<float>(particles->particle_list[i]->rad),
                 particles->particle_list[i]->rgb);
+        buf.append(line, len);
     }
 
-    fprintf(gnuplotPipe, "e\n");
+    buf += "e\n";
 
-    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n",
-            static_cast<int>(particles->particle_list.size()));
-    fprintf(gnuplotPipe, "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->fps));
-    fprintf(gnuplotPipe, "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->KE / 1000));
-    fprintf(gnuplotPipe, "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->PE / 1000));
-    fprintf(gnuplotPipe, "set label 6 'HE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->HE / 1000));
-    fprintf(gnuplotPipe, "set label 7 'TE= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->TE / 1000));
-    fprintf(gnuplotPipe, "set label 8 'Mom x= %f K' at screen 0.01,0.60 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->mom_x / 1000));
-    fprintf(gnuplotPipe, "set label 9 'Mom y= %f K' at screen 0.01,0.55 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->mom_y / 1000));
-    fprintf(gnuplotPipe, "set label 10 'Relative TE Error= %f' at screen 0.01,0.50 textcolor rgb 'white'\n",
-            static_cast<float>(metrics_t->relative_error));
+    // N label is set once in plot_run (never changes)
+    // Energy/momentum labels only in debug mode
+    if (Engine::debug_mode()) {
+        snprintf(line, sizeof(line), "set label 3 'FPS= %f' at screen 0.01,0.85 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->fps));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 4 'KE= %f K' at screen 0.01,0.80 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->KE / 1000));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 5 'PE= %f K' at screen 0.01,0.75 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->PE / 1000));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 6 'HE= %f K' at screen 0.01,0.70 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->HE / 1000));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 7 'TE= %f K' at screen 0.01,0.65 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->TE / 1000));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 8 'Mom x= %f K' at screen 0.01,0.60 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->mom_x / 1000));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 9 'Mom y= %f K' at screen 0.01,0.55 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->mom_y / 1000));
+        buf += line;
+        snprintf(line, sizeof(line), "set label 10 'Relative TE Error= %f' at screen 0.01,0.50 textcolor rgb 'white'\n",
+                static_cast<float>(metrics_t->relative_error));
+        buf += line;
+    }
 
+    fwrite(buf.data(), 1, buf.size(), gnuplotPipe);
     fflush(gnuplotPipe);
 }
 

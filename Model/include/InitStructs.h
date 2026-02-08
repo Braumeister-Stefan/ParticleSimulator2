@@ -25,7 +25,7 @@ struct scenario {
     bool three_d; //if false, the simulation will be in 2D
 
     //[physics engine parameters]
-    high_prec beta = high_prec("0.1"); //contact bias beta
+    high_prec beta = 0.1; //contact bias beta
     string save_obj = "FALSE"; 
 
 };

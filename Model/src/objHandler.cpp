@@ -10,6 +10,7 @@
 #include <fstream>
 #include <memory>
 #include <cmath>
+#include <sstream>
 
 //to use pi
 #ifndef M_PI
@@ -207,7 +208,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     //7. Remove overlapping particles with slop 
 
-    remove_overlaps2(particles, high_prec("0.1"));
+    remove_overlaps2(particles, 0.1);
     
 
     //8 Inform user of the number of particles loaded
@@ -359,14 +360,14 @@ shared_ptr<Particles> ObjHandler::flatten_complex_obj(shared_ptr<object> request
 
 
 void add_rotation(Particle& particle, const Vector2D& center, const high_prec& omega) {
-    high_prec dx = high_prec(particle.x) - center.x;
-    high_prec dy = high_prec(particle.y) - center.y;
+    high_prec dx = particle.x - center.x;
+    high_prec dy = particle.y - center.y;
 
     high_prec dvx = -omega * dy;
     high_prec dvy =  omega * dx;
 
-    particle.vx += dvx.convert_to<double>();
-    particle.vy += dvy.convert_to<double>();
+    particle.vx += dvx;
+    particle.vy += dvy;
 }
 
 
@@ -374,50 +375,84 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
     shared_ptr<Particles> particles(new Particles);
 
     high_prec circle_rad = complex_object->complexity_size;
-    int complexity_n = static_cast<int>(complex_object->complexity_n.convert_to<double>());
+    int complexity_n = static_cast<int>(complex_object->complexity_n);
     Vector2D center = { complex_object->x, complex_object->y };
 
     // assume omega exists on complex_object
     high_prec omega = complex_object->omega;
 
+    int max_attempts = 10 * std::max(1, complexity_n);
+    int last_pct = -1;
 
+    cout << "Sampling " << complexity_n << " particles (batch mode, " << max_attempts << " candidates): ";
+    cout.flush();
 
-    // Keep sampling + de-overlap until we reach exactly complexity_n (or hit a safety limit)
-    int attempts = 0;
-    int max_attempts = 50 * std::max(1, complexity_n);
+    // --- Batch sampling: generate all candidates up-front, then greedily accept ---
 
-    while (static_cast<int>(particles->particle_list.size()) < complexity_n && attempts < max_attempts) {
-        attempts++;
+    // 1. Generate the full batch of candidate particles
+    vector<shared_ptr<Particle>> candidates;
+    candidates.reserve(max_attempts);
 
-        unique_ptr<Particle> particle(new Particle);
+    for (int b = 0; b < max_attempts; ++b) {
+        auto particle = make_shared<Particle>();
 
         Vector2D sample_point = sample_in_circle(center, circle_rad);
 
-        particle->particle_id = attempts; // stable unique-ish id; remove_overlaps re-sorts anyway
-        particle->r = complex_object->r;
-        particle->g = complex_object->g;
-        particle->b = complex_object->b;
-        particle->x = sample_point.x.convert_to<double>();
-        particle->y = sample_point.y.convert_to<double>();
-        particle->z = 0;
-
-        // base translational velocity
-        particle->vx = complex_object->vx;
-        particle->vy = complex_object->vy;
-        particle->vz = complex_object->vz;
-
+        particle->particle_id = b;
+        particle->r    = complex_object->r;
+        particle->g    = complex_object->g;
+        particle->b    = complex_object->b;
+        particle->x    = sample_point.x;
+        particle->y    = sample_point.y;
+        particle->z    = 0;
+        particle->vx   = complex_object->vx;
+        particle->vy   = complex_object->vy;
+        particle->vz   = complex_object->vz;
         particle->rad  = complex_object->rad;
         particle->rest = complex_object->rest;
         particle->temp = complex_object->temp;
 
-        // add rigid-body tangential velocity about the circle center
         add_rotation(*particle, center, omega);
 
-        particles->particle_list.push_back(std::move(particle));
+        candidates.push_back(std::move(particle));
 
-        // enforce non-overlap as we build (ensures we end with ~exactly complexity_n)
-        remove_overlaps(particles);
+        // progress bar
+        int pct = ((b + 1) * 100) / max_attempts;
+        if (pct > last_pct) {
+            for (int p = last_pct + 1; p <= pct; ++p) cout << "-";
+            cout.flush();
+            last_pct = pct;
+        }
     }
+
+    // 2. Greedy accept: walk through candidates, keep those that don't overlap any accepted particle
+    const high_prec two_rad = complex_object->rad * 2.0;
+    const high_prec two_rad_sq = two_rad * two_rad;
+
+    particles->particle_list.reserve(complexity_n);
+
+    for (int c = 0; c < static_cast<int>(candidates.size()) &&
+             static_cast<int>(particles->particle_list.size()) < complexity_n; ++c) {
+        const auto& cand = candidates[c];
+        bool overlaps = false;
+
+        for (int j = static_cast<int>(particles->particle_list.size()) - 1; j >= 0; --j) {
+            const auto& placed = particles->particle_list[j];
+            high_prec dx = cand->x - placed->x;
+            high_prec dy = cand->y - placed->y;
+            if (dx * dx + dy * dy < two_rad_sq) {
+                overlaps = true;
+                break;
+            }
+        }
+
+        if (!overlaps) {
+            particles->particle_list.push_back(cand);
+        }
+    }
+
+    cout << " done (" << particles->particle_list.size() << "/" << complexity_n
+         << " placed from " << max_attempts << " candidates)" << endl;
 
     // set mass equal to complex_object mass divided by final particle count
     if (!particles->particle_list.empty()) {
@@ -635,38 +670,20 @@ void ObjHandler::state_to_cache(shared_ptr<Particles> final_state, string obj_na
 
 
 void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
-    // Sort particles by particle_id to ensure a consistent processing order
-    sort(particles->particle_list.begin(), particles->particle_list.end(),
-        [](shared_ptr<Particle> a, shared_ptr<Particle> b) {
-            return a->particle_id < b->particle_id;
-        });
-
-    vector<shared_ptr<Particle>> non_overlapping_particles;
-    int removed_overlaps = 0;
-
-    // Iterate over each particle
-    for (int i = 0; i < particles->particle_list.size(); ++i) {
+    // Iterate from the back so that newly-appended particles (at the end)
+    // are the ones removed when they overlap an already-placed particle.
+    for (int i = static_cast<int>(particles->particle_list.size()) - 1; i >= 0; --i) {
         bool overlap_found = false;
-
-        // Compare the current particle with all remaining particles
-        for (int j = i + 1; j < particles->particle_list.size(); ++j) {
+        for (int j = 0; j < i; ++j) {
             if (remove_overlap(particles->particle_list[i], particles->particle_list[j])) {
                 overlap_found = true;
-                ++removed_overlaps;
-                break; // Stop further checks for this particle since it's overlapped
+                break;
             }
         }
-
-        // If no overlap was found, keep the particle
-        if (!overlap_found) {
-            non_overlapping_particles.push_back(particles->particle_list[i]);
+        if (overlap_found) {
+            particles->particle_list.erase(particles->particle_list.begin() + i);
         }
     }
-
-    // Replace the original particle list with the non-overlapping particles
-    particles->particle_list = std::move(non_overlapping_particles);
-
-    cout << "Removed " << removed_overlaps << " overlapping particles." << endl;
 }
 
 void ObjHandler::remove_overlaps2(shared_ptr<Particles> particles, high_prec slop) {

@@ -7,13 +7,10 @@
 #include <vector>
 #include <memory>
 
-#include <boost/multiprecision/cpp_dec_float.hpp>
-
 
 
 using namespace std;
-using namespace boost::multiprecision;
-using high_prec = cpp_dec_float_50;
+using high_prec = double;
 
 struct Particle {
     int particle_id;

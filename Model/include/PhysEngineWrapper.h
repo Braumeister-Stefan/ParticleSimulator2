@@ -33,6 +33,9 @@ public:
     // optional dt access
     static high_prec dt() { return EngineCore::dt; }
 
+    // expose debug mode flag for other components (e.g. plotter)
+    static bool debug_mode();
+
 private:
     EngineCore core;
 };

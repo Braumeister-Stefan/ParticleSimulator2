@@ -9,14 +9,12 @@
 #include <string>
 #include <chrono>
 
-#include <boost/multiprecision/cpp_dec_float.hpp>
-
 #include "InitStructs.h"
 #include "MathUtils.h"
 
 class EngineCore {
 public:
-    using high_prec = boost::multiprecision::cpp_dec_float_50;
+    using high_prec = double;
 
     // Single source-of-truth dt for the entire simulation
     static high_prec dt;
@@ -116,7 +114,9 @@ private:
     high_prec calculate_potential_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);
     high_prec calculate_heating_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2);
 
-    
+    // Rank 1: cached post-drift forces reused as next step's pre-drift forces
+    std::vector<Vector2D> cached_force_;
+    bool forces_valid_ = false;
 
 private:
     static high_prec margin_TE_error;

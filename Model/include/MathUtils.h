@@ -6,13 +6,6 @@
 //Internal libraries
 #include "Particles.h"
 
-#include <boost/multiprecision/cpp_dec_float.hpp>
-
-
-//namespaces
-using namespace boost::multiprecision;
-using high_prec = boost::multiprecision::cpp_dec_float_50;
-
 
 //Boosterized structures
 
