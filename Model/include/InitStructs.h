@@ -17,16 +17,33 @@ struct scenario {
     int scenario_id;
     string name;
     string obj_list;
+
+    //[simulation parameters]
     high_prec time;
-    string interaction_func;
+    high_prec dt; //time step
+    high_prec beta = 0.1; //contact bias beta
+
+    //[run options]
     bool try_cache; //if true, check if the scenario has been run before and use the results 
     bool refresh_obj; //if true, rebuild the complex objects
-    high_prec dt; //time step
-    bool three_d; //if false, the simulation will be in 2D
+    string save_obj = "FALSE";
 
     //[physics engine parameters]
-    high_prec beta = 0.1; //contact bias beta
-    string save_obj = "FALSE"; 
+    high_prec collision_distance_tolerance = 1e-5;
+
+    //[debug/output parameters]
+    bool debug_mode = false;
+    bool report_energy_per_step = false;
+    bool save_scenario = false;
+
+    //[plotter parameters]
+    high_prec heat_gamma = 0.7;
+    high_prec heat_cutoff_frac = 0.0;
+    int plot_speed_multiplier = 20;
+
+    //[benchmark parameters] (-1 means no benchmark available)
+    high_prec benchmark_te_error_pct = -1.0;
+    high_prec benchmark_sim_time_sec = -1.0;
 
 };
 

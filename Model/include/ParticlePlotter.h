@@ -31,7 +31,7 @@ public:
     //convert r,g,b to hex for all particles
     //functions to convert rgb values to hex code
 
-    void apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps);
+    void apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, shared_ptr<scenario> scenario);
     int intensity_to_rgb(high_prec r, high_prec g, high_prec b);
 
     //function to brighten the rgb values of the snapshots
@@ -41,6 +41,7 @@ public:
 
 private:
     // Add private member variables if needed
+    bool debug_mode_ = false;
 };
 
 #endif // PARTICLE_PLOTTER_H

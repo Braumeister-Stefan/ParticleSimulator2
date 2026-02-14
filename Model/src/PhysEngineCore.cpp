@@ -25,7 +25,7 @@ static const high_prec kAdaptiveDtAccelEps = 1e-6;
 int EngineCore::update_iter = 0;
 
 // COLLISION CONSTANTS
-static const high_prec kCollisionDistanceTolerance = 1e-5;
+high_prec EngineCore::collision_distance_tolerance_ = 1e-5;
 //static const high_prec kContactBiasBeta = 0.5;     // larger = stronger
 
 //to set kContactBiasBeta based on a value in scenario object
@@ -68,7 +68,7 @@ static inline bool check_collission_ptr(const Particle* particle1, const Particl
 
     // Squared-distance early reject:
     // old: (distance - sum_radii) < tol  <=> distance < sum_radii + tol
-    const high_prec thresh = sum_radii + kCollisionDistanceTolerance;
+    const high_prec thresh = sum_radii + EngineCore::collision_distance_tolerance_;
     if (!(dist2 < thresh * thresh)) return false;
 
     if (dist2 == 0.0) return false;
@@ -148,10 +148,13 @@ static inline void resolve_collission_ptr(Particle* particle1, Particle* particl
                       + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy);
 
     high_prec energy_lost = KE_pre - KE_post;
-    // keep existing heat bookkeeping behavior (no physics change)
-    high_prec temp = energy_lost / 2.0;
-    particle1->temp += temp;
-    particle2->temp += temp;
+    // Only add heat if energy_lost is significant (avoid numerical flicker)
+    const high_prec EPSILON = 1e-10;
+    if (std::abs(energy_lost) > EPSILON) {
+        high_prec temp = energy_lost / 2.0;
+        particle1->temp += temp;
+        particle2->temp += temp;
+    }
 }
 
 
@@ -241,6 +244,10 @@ void EngineCore::set_overlap_beta(std::shared_ptr<scenario> scenario) {
     kContactBiasBeta = scenario->beta;
 }
 
+void EngineCore::set_collision_distance_tolerance(std::shared_ptr<scenario> scenario) {
+    collision_distance_tolerance_ = scenario->collision_distance_tolerance;
+}
+
 // =======================
 // 1 CORE STEP
 // =======================
@@ -250,7 +257,14 @@ void EngineCore::step(std::shared_ptr<Particles> particles, StepEnergyTrace* tra
         trace->TE1 = calc_TE(particles);
     }
 
-    resolve_collisions(particles);
+    if (trace) {
+        auto t0 = clock_t::now();
+        resolve_collisions(particles);
+        auto t1 = clock_t::now();
+        trace->collision_seconds = seconds_between(t0, t1);
+    } else {
+        resolve_collisions(particles);
+    }
 
     if (trace) {
         trace->TE2 = calc_TE(particles);
@@ -258,7 +272,14 @@ void EngineCore::step(std::shared_ptr<Particles> particles, StepEnergyTrace* tra
         trace->rel_collision = safe_rel_error(trace->TE2, trace->TE1);
     }
 
-    resolve_gravity_verlet(particles);
+    if (trace) {
+        auto t0 = clock_t::now();
+        resolve_gravity_verlet(particles);
+        auto t1 = clock_t::now();
+        trace->verlet_seconds = seconds_between(t0, t1);
+    } else {
+        resolve_gravity_verlet(particles);
+    }
 
     if (trace) {
         trace->TE3 = calc_TE(particles);

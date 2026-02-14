@@ -37,6 +37,10 @@ public:
         high_prec PE = 0;
         high_prec HE = 0;
         high_prec TE = 0;
+
+        // Stage timing (seconds)
+        double collision_seconds = 0;
+        double verlet_seconds    = 0;
     };
 
     EngineCore();
@@ -78,6 +82,7 @@ public:
     // Misc
     void update_locations(std::shared_ptr<Particles> particles, std::shared_ptr<backed_scaler> scaler);
     void set_overlap_beta(std::shared_ptr<scenario> scenario);
+    void set_collision_distance_tolerance(std::shared_ptr<scenario> scenario);
 
     // Collision detection
     bool check_overlap(std::shared_ptr<Particle> particle1, std::shared_ptr<Particle> particle2);
@@ -104,6 +109,8 @@ public:
     static int energy_gap_corrections_incomplete;
 
     static long long collisions;
+
+    static high_prec collision_distance_tolerance_;
 
 private:
     // MUST match old calculate_max_acceleration semantics exactly:

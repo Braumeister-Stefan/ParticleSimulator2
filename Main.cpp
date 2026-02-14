@@ -39,13 +39,20 @@ int main() {
     //3b. Run the model from scratch and save the snapshots
 
         //3b.1. render and store the objects at t0
+        shared_ptr<Particles> particles = model.obj_handler->process_objs(selected_scenario);
 
-        shared_ptr<Particles> particles = model.obj_handler-> process_objs(selected_scenario);
-
+        //3b.1a. create a snapshots object and store the initial state before any simulation steps
+        shared_ptr<snapshots> initial_states = make_shared<snapshots>();
+        extern std::unique_ptr<Particles> make_light_snapshot(const Particles& src); // forward declaration
+        initial_states->snaps.push_back(make_light_snapshot(*particles));
 
         //3b.2. run the model
         particle_states = model.engine->run(selected_scenario, particles);
-        
+
+        //3b.3. prepend the initial state to the simulation results
+        if (particle_states) {
+            particle_states->snaps.insert(particle_states->snaps.begin(), std::move(initial_states->snaps[0]));
+        }
     }
 
     //4. validate the simulation and generate metrics

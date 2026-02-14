@@ -45,7 +45,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    const int column_count = 10;
+    const int column_count = 17;
 
     io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(scenario_input_path);
     
@@ -54,15 +54,19 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     //scenario new_scenario;
     scenarios scenario_list;
 
-    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10;
+    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17;
 
 
     int scenarios_loaded = 1;
 
     //discard the header row. This list is a guide to the columns in the csv file.
-    in.read_header(io::ignore_extra_column, "SCENARIO_NAME", "OBJ_LIST", "TIME", "INTERACTION_FUNC", "TRY_CACHE", "REFRESH_OBJ", "DT","3D","BETA","SAVED_OBJ");
+    in.read_header(io::ignore_extra_column, "SCENARIO_NAME", "OBJ_LIST", "TIME", "DT", "BETA",
+        "SAVED_OBJ", "COLLISION_DIST_TOL",
+        "HEAT_GAMMA", "HEAT_CUTOFF_FRAC", "PLOT_SPEED_MULTIPLIER",
+        "BENCHMARK_TE_ERROR_PCT", "BENCHMARK_SIM_TIME_SEC",
+        "TRY_CACHE", "REFRESH_OBJ", "DEBUG_MODE", "REPORT_ENERGY_PER_STEP", "SAVE_SCENARIO");
 
-    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10)) {
+    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17)) {
 
         unique_ptr<scenario> new_scenario(new scenario);
 
@@ -72,41 +76,29 @@ shared_ptr<scenario> Interfacer::select_scenario() {
         new_scenario-> obj_list = col2;
 
         new_scenario-> time = stod(col3);
-        
-        new_scenario-> interaction_func = col4;
+        new_scenario-> dt = stod(col4);
+        new_scenario-> beta = stod(col5);
 
-        if (col5 == "TRUE") {
-            new_scenario-> try_cache = true;
+        if (col6 != "FALSE") {
+            new_scenario-> save_obj = col6;
         } else {
-            new_scenario-> try_cache = false;
-        }
-        
-        if (col6 == "TRUE") {
-            new_scenario-> refresh_obj = true;
-        } else {
-            new_scenario-> refresh_obj = false;
+            new_scenario-> save_obj = "FALSE";
         }
 
-        new_scenario-> dt = stod(col7);
+        new_scenario-> collision_distance_tolerance = stod(col7);
 
-        if (col8 == "TRUE") {
-            new_scenario-> three_d = true;
-        } else {
-            new_scenario-> three_d = false;
-        }
+        new_scenario-> heat_gamma = stod(col8);
+        new_scenario-> heat_cutoff_frac = stod(col9);
+        new_scenario-> plot_speed_multiplier = stoi(col10);
 
-        new_scenario-> beta = stod(col9);
+        new_scenario-> benchmark_te_error_pct = stod(col11);
+        new_scenario-> benchmark_sim_time_sec = stod(col12);
 
-        if (col10 != "FALSE") {
-            new_scenario-> save_obj = col10;
-
-
-
-        } else {
-            new_scenario-> save_obj = false;
-
-
-        }
+        new_scenario-> try_cache = (col13 == "TRUE");
+        new_scenario-> refresh_obj = (col14 == "TRUE");
+        new_scenario-> debug_mode = (col15 == "TRUE");
+        new_scenario-> report_energy_per_step = (col16 == "TRUE");
+        new_scenario-> save_scenario = (col17 == "TRUE");
 
 
         
@@ -142,13 +134,20 @@ shared_ptr<scenario> Interfacer::select_scenario() {
             cout << "Name: " << scenario_list.scenario_list[i]->name << endl;
             cout << "Object List: " << scenario_list.scenario_list[i]->obj_list << endl;
             cout << "Time (s): " << scenario_list.scenario_list[i]->time << endl;
-            cout << "Interaction Function: " << scenario_list.scenario_list[i]->interaction_func << endl;
-            cout << "Try Cache: " << scenario_list.scenario_list[i]->try_cache << endl;
-            cout << "Refresh Object: " << scenario_list.scenario_list[i]->refresh_obj << endl;
             cout << "Time Step Length: " << scenario_list.scenario_list[i]->dt << endl;
-            cout << "3D: " << scenario_list.scenario_list[i]->three_d << endl;
             cout << "Contact Bias Beta: " << scenario_list.scenario_list[i]->beta << endl;
             cout << "Saved OBJ (FALSE if not saved as object): " << scenario_list.scenario_list[i]->save_obj << endl;
+            cout << "Collision Distance Tolerance: " << scenario_list.scenario_list[i]->collision_distance_tolerance << endl;
+            cout << "Heat Gamma: " << scenario_list.scenario_list[i]->heat_gamma << endl;
+            cout << "Heat Cutoff Frac: " << scenario_list.scenario_list[i]->heat_cutoff_frac << endl;
+            cout << "Plot Speed Multiplier: " << scenario_list.scenario_list[i]->plot_speed_multiplier << endl;
+            cout << "Benchmark TE Error (%): " << scenario_list.scenario_list[i]->benchmark_te_error_pct << endl;
+            cout << "Benchmark Sim Time (s): " << scenario_list.scenario_list[i]->benchmark_sim_time_sec << endl;
+            cout << "Try Cache: " << scenario_list.scenario_list[i]->try_cache << endl;
+            cout << "Refresh Object: " << scenario_list.scenario_list[i]->refresh_obj << endl;
+            cout << "Debug Mode: " << scenario_list.scenario_list[i]->debug_mode << endl;
+            cout << "Report Energy Per Step: " << scenario_list.scenario_list[i]->report_energy_per_step << endl;
+            cout << "Save Scenario: " << scenario_list.scenario_list[i]->save_scenario << endl;
         }
     }
     cout << endl;

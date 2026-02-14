@@ -9,7 +9,6 @@
 #include <iomanip>
 #include <limits>
 #include <stdexcept>
-#include <unordered_map>
 
 #define CSV_IO_NO_THREAD
 #include "../include/3party/csv.h"
@@ -37,17 +36,14 @@ static inline high_prec safe_rel_error(high_prec post, high_prec pre) {
 // =======================
 // DEBUG & REPORTING CONFIG
 // =======================
-static const bool kDebugMode           = false;  // Toggle energy tracing and stage-wise error accumulation
-static const bool kReportEnergyPerStep = false;
 static const int  kStepPauseInterval   = 100;
 
 // =======================
 // CACHE CONFIG
 // =======================
 static const int  kCacheWriteEveryN    = 1;     // Save every Nth snapshot to cache (1 = all)
-static const bool kSaveScenario        = false; // Save simulation states to cache file
 
-bool Engine::debug_mode() { return kDebugMode; }
+bool Engine::debug_mode(std::shared_ptr<scenario> scenario) { return scenario->debug_mode; }
 
 static inline void pause_for_user() {
     std::cout << "Press enter to continue..." << std::endl;
@@ -112,34 +108,6 @@ static inline void print_step_report(
 static const high_prec kBenchmarkEqualRelThreshFrac = 0.0005; // 0.05% = 0.0005 fraction
 // If benchmark is exactly 0, treat "equal" as absolute current error <= 0.05% (in percent units)
 static const high_prec kBenchmarkEqualAbsThreshPct  = 0.05;
-
-// Benchmarks stored as TOTAL RELATIVE TE ERROR IN PERCENT (|ΔTE|/|TE0| * 100).
-// Scenario keys match scenario->name exactly (as before splitting).
-static const std::unordered_map<std::string, high_prec> kBenchmarkTotalTEErrorPct = {
-    {"Planet + Moon System", 0.000012043152104},
-    {"Planet + Moon System_short",  0.001522},
-    {"Planet + Moon System_shorter", 0.000000092628923}
-};
-
-static const std::unordered_map<std::string, high_prec> kBenchmarkSimTimeSec = {
-    {"Planet + Moon System", 4.513e+04},
-    {"Planet + Moon System_short",  1292.951344},
-    {"Planet + Moon System_shorter", 184.122661}
-};
-
-static inline bool lookup_benchmark_te_error_pct(const std::string& scenario_name, high_prec& out_benchmark_pct) {
-    auto it = kBenchmarkTotalTEErrorPct.find(scenario_name);
-    if (it == kBenchmarkTotalTEErrorPct.end()) return false;
-    out_benchmark_pct = it->second;
-    return true;
-}
-
-static inline bool lookup_benchmark_sim_time_sec(const std::string& scenario_name, high_prec& out_benchmark_sec) {
-    auto it = kBenchmarkSimTimeSec.find(scenario_name);
-    if (it == kBenchmarkSimTimeSec.end()) return false;
-    out_benchmark_sec = it->second;
-    return true;
-}
 
 static inline void print_benchmark_comparison_report(
     const std::string& scenario_name,
@@ -257,6 +225,7 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 {
     //set core physics parameters
     core.set_overlap_beta(scenario);
+    core.set_collision_distance_tolerance(scenario);
 
     // Reset run-level counters (wrapper-side)
     high_prec total_TE_error_overlap   = 0;
@@ -282,20 +251,22 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     int steps = static_cast<int>(steps_db);
     cout << "Number of steps to be simulated: " << steps << endl << endl;
 
-    // Pre-allocate all metrics objects up-front (avoids per-step heap allocation)
-    particle_states->metrics.resize(steps);
-    for (int mi = 0; mi < steps; ++mi) {
-        particle_states->metrics[mi] = make_shared<test_metrics_t>();
-    }
+    // Pre-allocate metrics alongside snapshots (not per-step)
     // Reserve approximate snapshot capacity to reduce reallocations
     if (write_k_frames > 0) {
         const int expected_snaps = (steps + write_k_frames - 1) / write_k_frames;
         particle_states->snaps.reserve(static_cast<size_t>(expected_snaps));
+        particle_states->metrics.reserve(static_cast<size_t>(expected_snaps));
     }
 
     // Initial TE baseline for final reporting
     high_prec TE_initial = core.calc_TE(particles);
     high_prec TE_final   = TE_initial;
+
+    // Debug-mode timing accumulators
+    double total_collision_secs = 0.0;
+    double total_verlet_secs    = 0.0;
+    double total_other_secs     = 0.0;
 
     EngineCore::clock_t::time_point sim_start = EngineCore::clock_t::now();
 
@@ -315,22 +286,33 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     for (int i = 0; i < steps; i++) {
         EngineCore::update_iter = i;
 
-        if (kDebugMode) {
-            StepEnergyTrace tr;
+        StepEnergyTrace tr;  // declared at loop scope so snapshot code can read it
+
+        if (scenario->debug_mode) {
 
             EngineCore::clock_t::time_point step_start_report;
             EngineCore::clock_t::time_point step_end_report;
 
-            if (kReportEnergyPerStep) step_start_report = EngineCore::clock_t::now();
-            core.step(particles, &tr); // FIX: only step once in debug mode
-            if (kReportEnergyPerStep) step_end_report = EngineCore::clock_t::now();
+            auto iter_t0 = EngineCore::clock_t::now();
+            if (scenario->report_energy_per_step) step_start_report = iter_t0;
+            core.step(particles, &tr);
+            auto iter_t1 = EngineCore::clock_t::now();
+            if (scenario->report_energy_per_step) step_end_report = iter_t1;
 
             // Accumulate stage-wise TE deltas (signed)
             total_TE_error_overlap   += tr.dE_overlap;
             total_TE_error_collision += tr.dE_collision;
             total_TE_error_verlet    += tr.dE_verlet;
 
-            if (kReportEnergyPerStep) {
+            // Accumulate stage timing
+            total_collision_secs += tr.collision_seconds;
+            total_verlet_secs    += tr.verlet_seconds;
+            double iter_total = EngineCore::seconds_between(iter_t0, iter_t1);
+            // Exclude plotting time from overhead
+            // (Assume plotting is handled outside this timing, or add explicit timing if needed)
+            total_other_secs += (iter_total - tr.collision_seconds - tr.verlet_seconds);
+
+            if (scenario->report_energy_per_step) {
                 double step_seconds = EngineCore::seconds_between(step_start_report, step_end_report);
                 print_step_report(i, steps, tr, step_seconds);
                 if (kStepPauseInterval > 0 && ((i + 1) % kStepPauseInterval == 0)) {
@@ -345,17 +327,34 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         if (write_k_frames > 0) {
             const bool should_write = ((i + 1) % write_k_frames == 0) || (i == steps - 1);
             if (should_write) {
-                particle_states->snaps.push_back(make_light_snapshot(*particles)); // FIX 1: lightweight copy
+                particle_states->snaps.push_back(make_light_snapshot(*particles));
+
+                auto m = make_shared<test_metrics_t>();
+                m->margin_TE_error = core.get_margin_TE_error();
+                m->margin_TE_error_collision = core.get_margin_TE_error_collision();
+                m->margin_TE_error_integrate = core.get_margin_TE_error_integrate();
+
+                if (scenario->debug_mode) {
+                    m->KE = tr.KE;
+                    m->PE = tr.PE;
+                    m->HE = tr.HE;
+                    m->TE = tr.TE;
+                    m->relative_error = abs_hp(safe_rel_error(tr.TE, TE_initial));
+
+                    // Compute total momentum from current particle state
+                    high_prec mx = 0.0, my = 0.0;
+                    for (int pi = 0; pi < static_cast<int>(particles->particle_list.size()); ++pi) {
+                        const auto& p = particles->particle_list[pi];
+                        mx += p->m * p->vx;
+                        my += p->m * p->vy;
+                    }
+                    m->mom_x = mx;
+                    m->mom_y = my;
+                }
+
+                particle_states->metrics.push_back(m);
             }
         }
-
-        particle_states->metrics[i]->margin_TE_error = core.get_margin_TE_error();
-        //particle_states->metrics[i]->margin_TE_error_overlap   = core.get_margin_TE_error_overlap();
-        particle_states->metrics[i]->margin_TE_error_collision = core.get_margin_TE_error_collision();
-        particle_states->metrics[i]->margin_TE_error_integrate = core.get_margin_TE_error_integrate();
-        //particle_states->metrics[i]->overlap_iters_in_step = EngineCore::overlap_iter;
-        //particle_states->metrics[i]->margin_TE_error_overlap_ij_transl = core.get_margin_TE_error_overlap_ij_transl();
-        //particle_states->metrics[i]->margin_TE_error_overlap_ij_corrected = core.get_margin_TE_error_overlap_ij_corrected();
 
         // progress reporting: 5% buckets (compute pct only when needed)
         if (steps > 0 && (i + 1) >= next_report_step) {
@@ -398,56 +397,68 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     };
 
     high_prec dE_total = TE_final - TE_initial;
-    high_prec dE_total_abs = abs_hp(dE_total);
     high_prec dE_total_rel = abs_hp(safe_rel_error(TE_final, TE_initial));
     high_prec dE_total_rel_pct = dE_total_rel * 100.0; // total relative TE error (%)
 
-    cout << scenario->name << " simulation completed." << endl << endl;
-    cout << "Steps: " << steps << endl;
+    cout << endl;
+    cout << "========================================" << endl;
+    cout << scenario->name << " simulation completed." << endl;
+    cout << "========================================" << endl;
+    cout << "Steps:            " << steps << endl;
     cout << "Total collisions: " << EngineCore::collisions << endl;
-    cout << "Total sim time (s): " << std::setprecision(4) << std::defaultfloat << total_seconds << endl;
+    cout << "Sim wall time:    " << std::setprecision(4) << std::defaultfloat << total_seconds << " s" << endl;
 
     cout << std::fixed << std::setprecision(15);
 
-    // legacy-style totals
-    cout << "Total TE error (sum of parts): " << total_stage_sum << endl;
-    if (total_stage_sum != 0.0) {
-        cout << "% overlap error:   " << (total_TE_error_overlap   / total_stage_sum) * 100.0 << endl;
-        cout << "% collision error: " << (total_TE_error_collision / total_stage_sum) * 100.0 << endl;
-        cout << "% verlet error:    " << (total_TE_error_verlet    / total_stage_sum) * 100.0 << endl;
+    // --- Energy summary (always printed) ---
+    cout << endl;
+    cout << "--- Energy Summary ---" << endl;
+    cout << "  Initial TE: " << TE_initial << endl;
+    cout << "  Final TE:   " << TE_final << endl;
+    cout << "  Rel error:  " << dE_total_rel << " (" << dE_total_rel_pct << "%)" << endl;
+
+    if (dE_total > 0.0)      cout << "  Verdict:    ENERGY INCREASED" << endl;
+    else if (dE_total < 0.0) cout << "  Verdict:    ENERGY DECREASED" << endl;
+    else                      cout << "  Verdict:    ENERGY UNCHANGED" << endl;
+
+    // --- Stage error breakdown (debug mode only) ---
+    if (scenario->debug_mode) {
+           cout << endl;
+           cout << "--- Stage TE Error Breakdown (debug) ---" << endl;
+           cout << "  Sum of parts (signed): " << total_stage_sum << endl;
+           cout << "  Overlaps:   " << total_TE_error_overlap
+               << " (abs share " << pct_share(abs_hp(total_TE_error_overlap)) << "%" << endl;
+           cout << "  Collisions: " << total_TE_error_collision
+               << " (abs share " << pct_share(abs_hp(total_TE_error_collision)) << "%" << endl;
+           cout << "  Verlet:     " << total_TE_error_verlet
+               << " (abs share " << pct_share(abs_hp(total_TE_error_verlet)) << "%" << endl;
     }
 
-    // stage signed deltas + absolute share
-    cout << "Stage TE error (signed delta E):" << endl;
-    cout << "  overlaps:   " << total_TE_error_overlap
-         << " (abs share " << pct_share(abs_hp(total_TE_error_overlap)) << "%)" << endl;
-    cout << "  collisions: " << total_TE_error_collision
-         << " (abs share " << pct_share(abs_hp(total_TE_error_collision)) << "%)" << endl;
-    cout << "  verlet:     " << total_TE_error_verlet
-         << " (abs share " << pct_share(abs_hp(total_TE_error_verlet)) << "%)" << endl;
-
-    cout << "Stage TE error sum (signed): " << total_stage_sum << endl;
-
-    cout << "Total TE error vs initial:" << endl;
-    cout << "  initial TE: " << TE_initial << endl;
-    cout << "  final TE:   " << TE_final << endl;
-    cout << "  delta TE:   " << dE_total << endl;
-    cout << "  |delta TE|: " << dE_total_abs << endl;
-    cout << "  rel delta:  " << dE_total_rel << " (" << dE_total_rel_pct << "%)" << endl;
-
-    if (dE_total > 0.0)      cout << "ENERGY INCREASED" << endl;
-    else if (dE_total < 0.0) cout << "ENERGY DECREASED" << endl;
-    else                              cout << "ENERGY UNCHANGED" << endl;
+    // --- Stage timing breakdown (debug mode only) ---
+    if (scenario->debug_mode) {
+        double timing_sum = total_collision_secs + total_verlet_secs + total_other_secs;
+        auto timing_pct = [&](double part) -> double {
+            return timing_sum > 0.0 ? (part / timing_sum) * 100.0 : 0.0;
+        };
+        cout << endl;
+        cout << "--- Stage Timing Breakdown (debug) ---" << endl;
+        cout << std::fixed << std::setprecision(4);
+        cout << "  Collision handling: " << total_collision_secs << " s (" << timing_pct(total_collision_secs) << "%)" << endl;
+        cout << "  Velocity Verlet:    " << total_verlet_secs    << " s (" << timing_pct(total_verlet_secs)    << "%)" << endl;
+        cout << "  Other (overhead):   " << total_other_secs     << " s (" << timing_pct(total_other_secs)     << "%)" << endl;
+        cout << "  Total timed:        " << timing_sum           << " s" << endl;
+    }
 
     // =======================
     // BENCHMARK COMPARISON 
     // =======================
     {
-        high_prec bench_pct = 0;
-        high_prec bench_time = 0;
-        bool have_time_bench = lookup_benchmark_sim_time_sec(scenario->name, bench_time);
+        high_prec bench_pct  = scenario->benchmark_te_error_pct;
+        high_prec bench_time = scenario->benchmark_sim_time_sec;
+        bool have_te_bench   = (bench_pct  >= 0.0);
+        bool have_time_bench = (bench_time >= 0.0);
 
-        if (lookup_benchmark_te_error_pct(scenario->name, bench_pct)) {
+        if (have_te_bench) {
             print_benchmark_comparison_report(
                 scenario->name,
                 bench_pct,
@@ -475,7 +486,7 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         }
     }
 
-    if (kSaveScenario) {
+    if (scenario->save_scenario) {
         run_to_cache(scenario, particle_states);
     }
     return particle_states;
