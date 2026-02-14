@@ -185,20 +185,15 @@ static inline void print_benchmark_comparison_report(
 // =======================
 // LIGHTWEIGHT SNAPSHOT (MINIMAL FIELDS COPY)
 // =======================
-static inline unique_ptr<Particles> make_light_snapshot(const Particles& src) {
+unique_ptr<Particles> Engine::make_light_snapshot(const Particles& src) {
     auto dst = make_unique<Particles>();
-
     const size_t n = src.particle_list.size();
     dst->particle_list.resize(n);
-
     for (size_t j = 0; j < n; ++j) {
         if (!dst->particle_list[j]) dst->particle_list[j] = make_shared<Particle>();
-
         const auto& sp = src.particle_list[j];
         if (!sp) continue;
-
         auto& dp = dst->particle_list[j];
-
         dp->particle_id = sp->particle_id;
         dp->r    = sp->r;
         dp->g    = sp->g;
@@ -214,7 +209,6 @@ static inline unique_ptr<Particles> make_light_snapshot(const Particles& src) {
         dp->temp = sp->temp;
         dp->rest = sp->rest;
     }
-
     return dst;
 }
 

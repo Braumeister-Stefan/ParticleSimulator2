@@ -36,6 +36,9 @@ public:
     // expose debug mode flag for other components (e.g. plotter)
     static bool debug_mode(std::shared_ptr<scenario> scenario);
 
+    // make light snapshot
+    static std::unique_ptr<Particles> make_light_snapshot(const Particles& src);
+
 private:
     EngineCore core;
 };

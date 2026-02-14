@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build ParticleSimulator",
+			"type": "shell",
+			"command": "g++ -std=c++17 -O -fdiagnostics-color=always -g -o ParticleSimulator.exe Main.cpp Model/Model.cpp Model/src/Interfacer.cpp Model/src/MathUtils.cpp Model/src/objHandler.cpp Model/src/ParticlePlotter.cpp Model/src/PhysEngineCore.cpp Model/src/PhysEngineWrapper.cpp Model/src/PhysMetrics.cpp -I Model/include",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}

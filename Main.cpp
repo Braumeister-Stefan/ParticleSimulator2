@@ -43,8 +43,7 @@ int main() {
 
         //3b.1a. create a snapshots object and store the initial state before any simulation steps
         shared_ptr<snapshots> initial_states = make_shared<snapshots>();
-        extern std::unique_ptr<Particles> make_light_snapshot(const Particles& src); // forward declaration
-        initial_states->snaps.push_back(make_light_snapshot(*particles));
+        initial_states->snaps.push_back(Engine::make_light_snapshot(*particles));
 
         //3b.2. run the model
         particle_states = model.engine->run(selected_scenario, particles);
