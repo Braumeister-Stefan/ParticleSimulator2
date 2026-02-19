@@ -54,7 +54,15 @@ Source files:
 
 
 ## DevNotes
+### Notes (19/02/26)
 
+Implemented a barnes hut algorithm for gravity and used the same quadtree for pruning collission checks. See other branche.
+
+Barnes Hut seems to give a decent speed up but error does approach threshold of 1% which I ideally want to stay below. Pruning is highly beneficial as previously 0.2% of checks resulted in a collission, compared to 7% for the validation set now.
+
+Due to the increased efficiency, larger simulations are now possible, which lead to unexpected code crashes. My guess would be that I keep appending particle states to the same object in memory until my RAM is insufficient. To fix this, a cache system has been implemented that saves the computed frames regularly. this has two benefits: 1) frees up RAM and avoids crashes, 2) if there is a crash/manually stopped the programme simply re-running it will pick up at last cached step.
+
+Work ahead is to slightly better optimize the BH and quadtree pruning set up, allow for parameters to be user accessible and clean up the cache system introduced (which is very messy at present).
 ### Notes (08/02/26)
 Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. For evidence, see proofofconcept01-02-26.gif.
 
