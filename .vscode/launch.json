@@ -2,14 +2,231 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "ParticleSimulator (gdb) - Debug",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/ParticleSimulator.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "internalConsoleOptions": "openOnSessionStart",
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+      "avoidWindowsConsoleRedirection": true,
+      "logging": {
+        "engineLogging": true,
+        "trace": true,
+        "programOutput": true,
+        "exceptions": true
+      },
+      "setupCommands": [
+        {
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch throw",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch catch",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break abort",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break std::terminate",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGTERM stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGINT  stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGSEGV stop print nopass",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "C/C++ Runner: Debug Session (fixed)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/ParticleSimulator.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "openOnSessionStart",
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+      "avoidWindowsConsoleRedirection": true,
+      "setupCommands": [
+        {
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch throw",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch catch",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break abort",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break std::terminate",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGTERM stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGINT  stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGSEGV stop print nopass",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "C/C++ Runner: Debug Session (fixed)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/ParticleSimulator.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "openOnSessionStart",
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+      "avoidWindowsConsoleRedirection": true,
+      "setupCommands": [
+        {
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch throw",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch catch",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break abort",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break std::terminate",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGTERM stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGINT  stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGSEGV stop print nopass",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "C/C++ Runner: Debug Session (fixed)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/ParticleSimulator.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "openOnSessionStart",
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+      "avoidWindowsConsoleRedirection": true,
+      "setupCommands": [
+
+        { "text": "set breakpoint pending on", "ignoreFailures": true },
+
+        { "text": "break __cxa_throw", "ignoreFailures": true },
+        { "text": "break __gnu_cxx::__verbose_terminate_handler", "ignoreFailures": true },
+        { "text": "break exit", "ignoreFailures": true },
+        { "text": "break _exit", "ignoreFailures": true },
+
+        { "text": "break RaiseException", "ignoreFailures": true },
+        { "text": "break ExitProcess", "ignoreFailures": true },
+        { "text": "break TerminateProcess", "ignoreFailures": true },
+        { "text": "break FatalAppExitW", "ignoreFailures": true },
+        { "text": "break FatalAppExitA", "ignoreFailures": true },
+
+
+
+        {
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch throw",
+          "ignoreFailures": true
+        },
+        {
+          "text": "catch catch",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break abort",
+          "ignoreFailures": true
+        },
+        {
+          "text": "break std::terminate",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGTERM stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGINT  stop print nopass",
+          "ignoreFailures": true
+        },
+        {
+          "text": "handle SIGSEGV stop print nopass",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
       "name": "C/C++ Runner: Debug Session",
       "type": "cppdbg",
       "request": "launch",
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2_n2",
-      "program": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2_n2/build/Debug/outDebug",
+      "cwd": "c:/Users/smdw1/OneDrive/Bureaublad/Development/Projects/cpp/ParticleSimulator2_nlogn",
+      "program": "${workspaceFolder}/ParticleSimulator.exe",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

@@ -189,7 +189,7 @@ shared_ptr<snapshots> Metrics::compute_metrics(shared_ptr<scenario> scenario, sh
 
     cout << "Metrics computed." << endl << endl;
 
-    metrics_to_cache(scenario, particle_states);
+    
 
     return particle_states;
 }

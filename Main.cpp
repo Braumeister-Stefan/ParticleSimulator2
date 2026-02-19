@@ -28,42 +28,40 @@ int main() {
     //3. run the model
     shared_ptr<snapshots> particle_states;
 
-    //3a. Run from cache if allowed
-    if(selected_scenario->try_cache && model.engine->cache_exists(selected_scenario)) {
+    // render and store the objects at t0
+    shared_ptr<Particles> particles = model.obj_handler->process_objs(selected_scenario);
 
-        cout << "Loading scenario from cache..." << endl;
+    //create a snapshots object and store the initial state before any simulation steps
+    shared_ptr<snapshots> initial_states = make_shared<snapshots>();
+    initial_states->snaps.push_back(Engine::make_light_snapshot(*particles));
 
-       particle_states = model.engine->run_from_cache(selected_scenario);
+    model.engine->run(selected_scenario, particles);
 
+    cout << "run complete" << endl;
+
+    //4. retrieve states from cache
+
+    if (model.engine->cache_exists(selected_scenario)) {
+        particle_states = model.engine->run_from_cache(selected_scenario);
+        cout << "Particle states loaded from cache." << endl;
+
+        particle_states  = model.metrics->compute_metrics(selected_scenario, particle_states);
     } else {
-    //3b. Run the model from scratch and save the snapshots
-
-        //3b.1. render and store the objects at t0
-        shared_ptr<Particles> particles = model.obj_handler->process_objs(selected_scenario);
-
-        //3b.1a. create a snapshots object and store the initial state before any simulation steps
-        shared_ptr<snapshots> initial_states = make_shared<snapshots>();
-        initial_states->snaps.push_back(Engine::make_light_snapshot(*particles));
-
-        //3b.2. run the model
-        particle_states = model.engine->run(selected_scenario, particles);
-
-        //3b.3. prepend the initial state to the simulation results
-        if (particle_states) {
-            particle_states->snaps.insert(particle_states->snaps.begin(), std::move(initial_states->snaps[0]));
-        }
+        cout << "No cache found for this scenario. Unable to load particle states." << endl;
+        return 1;
     }
 
-    //4. validate the simulation and generate metrics
+    cout << "Dimensions of particle_states: " << particle_states->snaps.size() << " snapshots, "
+         << (particle_states->snaps.empty() ? 0 : particle_states->snaps[0]->particle_list.size()) << " particles per snapshot." << endl;
 
-    //particle_states = model.metrics->compute_metrics(selected_scenario, particle_states);
+    
 
     if (selected_scenario->save_obj != "FALSE") {
         //save the last particle state as a complex object
         shared_ptr<Particles> final_state = particle_states->snaps.back();
         model.obj_handler->state_to_cache(final_state, selected_scenario->save_obj);
+        
     }
-
 
     
     //5. visualize the model results using the snapshots

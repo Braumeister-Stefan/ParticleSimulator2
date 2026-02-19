@@ -11,6 +11,7 @@
 
 #include "InitStructs.h"
 #include "MathUtils.h"
+#include "Particles.h"
 
 class EngineCore {
 public:
@@ -38,9 +39,22 @@ public:
         high_prec HE = 0;
         high_prec TE = 0;
 
-        // Stage timing (seconds)
+        // Stage timing (seconds) - existing fields kept
         double collision_seconds = 0;
         double verlet_seconds    = 0;
+
+        // Refined timing split (seconds)
+        double gravity_force_seconds    = 0;
+        double integration_seconds      = 0;
+        double overhead_seconds         = 0;
+        double total_seconds            = 0;
+        double timing_residual_seconds  = 0; // check: total - (1+2+3+4)
+
+        // --- Trace-only debug "logging" counters ---
+        long long collision_checks   = 0;   // number of i<j pairs tested
+        long long collision_hits     = 0;   // number of collisions resolved
+        double    collision_hit_pct  = 0.0; // hits/checks * 100
+        long long gravity_pair_calcs = 0;   // number of i<j gravity interactions evaluated
     };
 
     EngineCore();
@@ -78,6 +92,7 @@ public:
     void resolve_collission(std::shared_ptr<Particle> particle1, std::shared_ptr<Particle> particle2);
 
     void resolve_gravity_verlet(std::shared_ptr<Particles> particles);
+    void verlet_half_kick(std::vector<std::shared_ptr<Particle>>& list, const std::vector<Vector2D>& forces, int n, high_prec dt);
 
     // Misc
     void update_locations(std::shared_ptr<Particles> particles, std::shared_ptr<backed_scaler> scaler);

@@ -34,7 +34,7 @@ struct scenario {
     //[debug/output parameters]
     bool debug_mode = false;
     bool report_energy_per_step = false;
-    bool save_scenario = false;
+    bool save_scenario = true;
 
     //[plotter parameters]
     high_prec heat_gamma = 0.7;

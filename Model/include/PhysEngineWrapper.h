@@ -1,6 +1,5 @@
 // =======================
 // PhysEngineWrapper.h (UPDATED)
-//   - add cache_exists / run_from_cache / run_to_cache back onto Engine (wrapper)
 //   - wrapper owns reporting + caching; core owns physics stepping
 // =======================
 
@@ -24,8 +23,9 @@ public:
     ~Engine() = default;
 
     // main
-    shared_ptr<snapshots> run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles);
+    void run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles);
 
+    // cache I/O
     void run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states);
     bool cache_exists(shared_ptr<scenario> scenario);
     shared_ptr<snapshots> run_from_cache(shared_ptr<scenario> scenario);
@@ -40,6 +40,14 @@ public:
     static std::unique_ptr<Particles> make_light_snapshot(const Particles& src);
 
 private:
+    // initializes/truncates cache and writes schema header; uses cache_exists()
+    bool initiate_cache(shared_ptr<scenario> scenario);
+
+    void inspect_cache(const string& scenario_name);
+
+    // NEW: helper for progress logging (cache file size in MB)
+    static double check_mb(shared_ptr<scenario> scenario);
+
     EngineCore core;
 };
 

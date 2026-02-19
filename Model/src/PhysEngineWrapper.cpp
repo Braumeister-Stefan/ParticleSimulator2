@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <limits>
 #include <stdexcept>
+#include <filesystem>
 
 #define CSV_IO_NO_THREAD
 #include "../include/3party/csv.h"
@@ -20,9 +21,7 @@ using namespace std::chrono;
 
 using StepEnergyTrace = EngineCore::StepEnergyTrace;
 
-static inline double safe_double_from_high_prec(const high_prec& v) {
-    return v;
-}
+static inline double safe_double_from_high_prec(const high_prec& v) { return v; }
 static inline double to_double(const high_prec& v) { return v; }
 
 static inline high_prec abs_hp(high_prec v) { return v < 0.0 ? -v : v; }
@@ -36,12 +35,152 @@ static inline high_prec safe_rel_error(high_prec post, high_prec pre) {
 // =======================
 // DEBUG & REPORTING CONFIG
 // =======================
-static const int  kStepPauseInterval   = 100;
+static const int  kStepPauseInterval = 100;
 
 // =======================
 // CACHE CONFIG
 // =======================
-static const int  kCacheWriteEveryN    = 1;     // Save every Nth snapshot to cache (1 = all)
+static const int  kCacheWriteEveryN     = 20;     // Save every Nth snapshot within a flush chunk
+static const int  kCacheFlushEverySteps = 5000;   // flush every N simulation timesteps
+
+// =======================
+// INCREMENTAL CACHE STATE (per run, file-scope)
+// =======================
+static bool      gCacheInitializedThisRun = false;
+static long long gCacheStepIdOffset       = 0;
+static long long gCacheMaxStepId          = -1;
+
+static inline std::string cache_file_from_name_or_path(const std::string& name_or_path) {
+    std::string file_name = name_or_path;
+
+    const bool has_sep =
+        (file_name.find('/')  != std::string::npos) ||
+        (file_name.find('\\') != std::string::npos);
+
+    const bool ends_with_csv =
+        (file_name.size() >= 4) &&
+        (file_name.substr(file_name.size() - 4) == ".csv");
+
+    if (!has_sep) {
+        if (!ends_with_csv) file_name = "Inputs/rendered_scenarios/" + file_name + ".csv";
+        else                file_name = "Inputs/rendered_scenarios/" + file_name;
+    }
+    return file_name;
+}
+
+// =======================
+// CACHE SCHEMA HELPER ("dictionary")
+// =======================
+struct CacheSchema {
+    static constexpr int kColumnCount = 15;
+
+    static inline void write_header(std::ostream& os) {
+        os << "step_id, particle_id,r,g,b,x,y,z,vx,vy,vz,m,rad,temp,rest\n";
+    }
+
+    template <typename TrimPolicy, typename QuotePolicy>
+    static inline void read_header(io::CSVReader<kColumnCount, TrimPolicy, QuotePolicy>& in) {
+        in.read_header(io::ignore_extra_column,
+            "step_id",
+            "particle_id",
+            "r", "g", "b",
+            "x", "y", "z",
+            "vx", "vy", "vz",
+            "m",
+            "rad",
+            "temp",
+            "rest"
+        );
+    }
+
+    struct Row {
+        std::string step_id;
+        std::string particle_id;
+        std::string r, g, b;
+        std::string x, y, z;
+        std::string vx, vy, vz;
+        std::string m;
+        std::string rad;
+        std::string temp;
+        std::string rest;
+    };
+
+    static inline void write_row(std::ostream& os, long long step_id, const Particle& p) {
+        os << step_id << ","
+           << p.particle_id << ","
+           << p.r << "," << p.g << "," << p.b << ","
+           << p.x << "," << p.y << "," << p.z << ","
+           << p.vx << "," << p.vy << "," << p.vz << ","
+           << p.m << ","
+           << p.rad << ","
+           << p.temp << ","
+           << p.rest << '\n';
+    }
+
+    static inline long long parse_step_id(const Row& row) {
+        return std::stoll(row.step_id);
+    }
+
+    static inline void parse_particle_fields(const Row& row, Particle& p) {
+        p.particle_id = std::stoi(row.particle_id);
+        p.r = std::stod(row.r);
+        p.g = std::stod(row.g);
+        p.b = std::stod(row.b);
+        p.x = std::stod(row.x);
+        p.y = std::stod(row.y);
+        p.z = std::stod(row.z);
+        p.vx = std::stod(row.vx);
+        p.vy = std::stod(row.vy);
+        p.vz = std::stod(row.vz);
+        p.m = std::stod(row.m);
+        p.rad = std::stod(row.rad);
+        p.temp = std::stod(row.temp);
+        p.rest = std::stod(row.rest);
+    }
+};
+
+static bool load_particles_from_cache_step(const std::string& name_or_path,
+                                           long long target_step_id,
+                                           Particles& out)
+{
+    const std::string file_name = cache_file_from_name_or_path(name_or_path);
+
+    typedef io::trim_chars<' ', '\t'> TrimPolicy;
+    typedef io::double_quote_escape<',', '\"'> QuotePolicy;
+
+    io::CSVReader<CacheSchema::kColumnCount, TrimPolicy, QuotePolicy> in(file_name);
+    CacheSchema::read_header(in);
+
+    CacheSchema::Row row;
+
+    out.particle_list.clear();
+    bool collecting = false;
+
+    while (in.read_row(
+        row.step_id,
+        row.particle_id,
+        row.r, row.g, row.b,
+        row.x, row.y, row.z,
+        row.vx, row.vy, row.vz,
+        row.m,
+        row.rad,
+        row.temp,
+        row.rest))
+    {
+        const long long sid = CacheSchema::parse_step_id(row);
+
+        if (sid == target_step_id) {
+            collecting = true;
+            auto particle = std::make_shared<Particle>();
+            CacheSchema::parse_particle_fields(row, *particle);
+            out.particle_list.push_back(particle);
+        } else if (collecting) {
+            break;
+        }
+    }
+
+    return !out.particle_list.empty();
+}
 
 bool Engine::debug_mode(std::shared_ptr<scenario> scenario) { return scenario->debug_mode; }
 
@@ -66,8 +205,7 @@ static inline void print_step_report(
     int pct = 0;
     if (steps_total > 0) {
         pct = (int)(((long long)(step_idx + 1) * 100LL) / (long long)steps_total);
-        if (pct > 100) pct = 100;
-        if (pct < 0) pct = 0;
+        pct = std::clamp(pct, 0, 100);
     }
 
     std::cout << std::fixed;
@@ -96,6 +234,15 @@ static inline void print_step_report(
               << "   rel = " << to_double(tr.rel_verlet) << "\n";
 
     line('-');
+    std::cout << "Work counters (trace):\n";
+    std::cout << "  Collision checks = " << tr.collision_checks
+              << "   Collisions = " << tr.collision_hits
+              << " (" << std::setprecision(4) << tr.collision_hit_pct << "%)\n";
+    std::cout << std::setprecision(0);
+    std::cout << "  Gravity pair-forces (i<j) evaluated = " << tr.gravity_pair_calcs << "\n";
+
+    line('-');
+    std::cout << std::setprecision(12);
     std::cout << "TE checkpoints:\n";
     std::cout << "  TE0(before overlaps) = " << to_double(tr.TE0) << "\n";
     std::cout << "  TE1(after overlaps ) = " << to_double(tr.TE1) << "\n";
@@ -104,9 +251,7 @@ static inline void print_step_report(
     line('=');
 }
 
-// Equality threshold for comparing CURRENT vs BENCHMARK error (relative difference), default 0.05%.
-static const high_prec kBenchmarkEqualRelThreshFrac = 0.0005; // 0.05% = 0.0005 fraction
-// If benchmark is exactly 0, treat "equal" as absolute current error <= 0.05% (in percent units)
+static const high_prec kBenchmarkEqualRelThreshFrac = 0.0005;
 static const high_prec kBenchmarkEqualAbsThreshPct  = 0.05;
 
 static inline void print_benchmark_comparison_report(
@@ -127,8 +272,8 @@ static inline void print_benchmark_comparison_report(
 
     std::string verdict;
     bool have_rel = (benchmark_err_pct != 0.0);
-    high_prec rel_diff_frac = 0;   // (current - benchmark) / benchmark
-    high_prec rel_diff_pct  = 0;   // rel_diff_frac * 100
+    high_prec rel_diff_frac = 0;
+    high_prec rel_diff_pct  = 0;
 
     if (have_rel) {
         rel_diff_frac = (current_err_pct - benchmark_err_pct) / benchmark_err_pct;
@@ -138,7 +283,7 @@ static inline void print_benchmark_comparison_report(
         else                                                verdict = "BETTER ERROR";
     } else {
         if (abs_hp(current_err_pct) <= equal_abs_thresh_pct) verdict = "EQUAL ERROR";
-        else if (current_err_pct > 0.0)             verdict = "WORSE ERROR";
+        else if (current_err_pct > 0.0)                      verdict = "WORSE ERROR";
         else                                                 verdict = "BETTER ERROR";
     }
 
@@ -182,9 +327,51 @@ static inline void print_benchmark_comparison_report(
     cout << endl;
 }
 
-// =======================
-// LIGHTWEIGHT SNAPSHOT (MINIMAL FIELDS COPY)
-// =======================
+static inline void clear_particle_states_storage(shared_ptr<snapshots> particle_states) {
+    if (!particle_states) return;
+    particle_states->snaps.clear();
+    particle_states->metrics.clear();
+}
+
+double Engine::check_mb(shared_ptr<scenario> scenario) {
+    try {
+        namespace fs = std::filesystem;
+        const std::string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
+        if (!fs::exists(file_name)) return 0.0;
+        const auto bytes = static_cast<double>(fs::file_size(file_name));
+        return bytes / (1024.0 * 1024.0);
+    } catch (...) {
+        return 0.0;
+    }
+}
+
+bool Engine::initiate_cache(shared_ptr<scenario> scenario) {
+    const bool existed = cache_exists(scenario);
+
+    cout << "cache_exists: " << existed << endl;
+
+    const string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
+    ofstream file(file_name, std::ios::out | std::ios::trunc);
+    if (!file.is_open()) {
+        cout << "Failed to create a clean cache file!" << endl;
+        return false;
+    }
+
+    cout << "Initializing cache file: " << file_name << endl;
+
+    file << std::fixed << std::setprecision(15);
+    CacheSchema::write_header(file);
+    file.close();
+
+    gCacheInitializedThisRun = true;
+    gCacheStepIdOffset       = 0;
+
+    if (existed) cout << "Cache existed and was overwritten: " << file_name << endl;
+    else         cout << "Cache initialized: " << file_name << endl;
+
+    return true;
+}
+
 unique_ptr<Particles> Engine::make_light_snapshot(const Particles& src) {
     auto dst = make_unique<Particles>();
     const size_t n = src.particle_list.size();
@@ -212,20 +399,21 @@ unique_ptr<Particles> Engine::make_light_snapshot(const Particles& src) {
     return dst;
 }
 
-// =======================
-// RUN
-// =======================
-shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
+void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
 {
-    //set core physics parameters
     core.set_overlap_beta(scenario);
     core.set_collision_distance_tolerance(scenario);
 
-    // Reset run-level counters (wrapper-side)
+    size_t initial_n_particles = particles ? particles->particle_list.size() : 0;
+
     high_prec total_TE_error_overlap   = 0;
     high_prec total_TE_error_collision = 0;
     high_prec total_TE_error_verlet    = 0;
     EngineCore::collisions = 0;
+
+    long long total_collision_checks = 0;
+    long long total_collision_hits   = 0;
+    long long total_gravity_pairs    = 0;
 
     cout << "Engine (Wrapper) is initialized." << endl;
 
@@ -235,55 +423,96 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     cout << "Press enter to start the simulation." << endl;
     cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    // dt is configured in core (restored single call point)
     core.configure_dt(scenario, particles);
 
-    // Match plotter display stride: plotter steps by (int)(1/dt), so only snapshot that often
     const int write_k_frames = std::max(1, static_cast<int>(1.0 / scenario->dt));
 
     high_prec steps_db = scenario->time / scenario->dt;
     int steps = static_cast<int>(steps_db);
     cout << "Number of steps to be simulated: " << steps << endl << endl;
 
-    // Pre-allocate metrics alongside snapshots (not per-step)
-    // Reserve approximate snapshot capacity to reduce reallocations
+
+    int start_iter = 0;
+
+    bool cache_exists_flag = cache_exists(scenario);
+
+    bool cache_enabled = true; // WIP. User should have choice to ignore cached files and start fresh, or look for it.
+
+    if (cache_enabled && !cache_exists_flag) {
+        cache_enabled = initiate_cache(scenario);
+        if (!cache_enabled) {
+            cout << "Cache initialization failed. Proceeding without cache." << endl;
+        }
+    } else if (cache_enabled && cache_exists_flag) {
+        cout << "Cache exists. Inspecting contents..." << endl;
+        inspect_cache(scenario->name);
+
+        if (gCacheMaxStepId >= 0) {
+            if (!particles) particles = std::make_shared<Particles>();
+
+            if (load_particles_from_cache_step(scenario->name, gCacheMaxStepId, *particles)) {
+                start_iter = static_cast<int>(gCacheMaxStepId + 1);
+
+                gCacheInitializedThisRun = true;
+                gCacheStepIdOffset       = static_cast<long long>(start_iter);
+
+                cout << "Restored up to " << gCacheMaxStepId << endl;
+                     
+            } else {
+                cout << "Failed to load cached step_id " << gCacheMaxStepId
+                     << ". Starting from step 0." << endl;
+                gCacheMaxStepId = -1;
+            }
+        }
+    }
+
     if (write_k_frames > 0) {
-        const int expected_snaps = (steps + write_k_frames - 1) / write_k_frames;
+        int window_steps = steps;
+        if (cache_enabled && kCacheFlushEverySteps > 0) {
+            window_steps = std::min(steps, kCacheFlushEverySteps);
+        }
+        const int expected_snaps = (window_steps + write_k_frames - 1) / write_k_frames;
         particle_states->snaps.reserve(static_cast<size_t>(expected_snaps));
         particle_states->metrics.reserve(static_cast<size_t>(expected_snaps));
     }
 
-    // Initial TE baseline for final reporting
     high_prec TE_initial = core.calc_TE(particles);
     high_prec TE_final   = TE_initial;
 
-    // Debug-mode timing accumulators
-    double total_collision_secs = 0.0;
-    double total_verlet_secs    = 0.0;
-    double total_other_secs     = 0.0;
+    double total_collision_secs     = 0.0;
+    double total_verlet_secs        = 0.0;
+    double total_gravity_force_secs = 0.0;
+    double total_integration_secs   = 0.0;
+    double total_other_secs         = 0.0;
 
     EngineCore::clock_t::time_point sim_start = EngineCore::clock_t::now();
 
-    // Progress reporting (5% buckets) with O(#reports) math
     int last_reported_bucket = -5;
     int next_report_bucket   = -1;
     int next_report_step     = std::numeric_limits<int>::max();
 
     if (steps > 0) {
-        cout << "0% of the simulation complete." << endl;
+        //cout << "0% of the simulation complete." << endl;
         last_reported_bucket = 0;
         next_report_bucket   = 5;
         next_report_step     = (int)(((long long)steps * (long long)next_report_bucket + 99LL) / 100LL);
         if (next_report_step < 1) next_report_step = 1;
+
+        if (cache_enabled) {
+            auto old_flags = cout.flags();
+            auto old_prec  = cout.precision();
+            cout << "  Cached: " << std::fixed << std::setprecision(2) << check_mb(scenario) << " MB" << endl;
+            cout.flags(old_flags);
+            cout.precision(old_prec);
+        }
     }
 
-    for (int i = 0; i < steps; i++) {
+    for (int i = start_iter; i < steps; i++) {
         EngineCore::update_iter = i;
 
-        StepEnergyTrace tr;  // declared at loop scope so snapshot code can read it
+        StepEnergyTrace tr;
 
         if (scenario->debug_mode) {
-
             EngineCore::clock_t::time_point step_start_report;
             EngineCore::clock_t::time_point step_end_report;
 
@@ -293,18 +522,21 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
             auto iter_t1 = EngineCore::clock_t::now();
             if (scenario->report_energy_per_step) step_end_report = iter_t1;
 
-            // Accumulate stage-wise TE deltas (signed)
             total_TE_error_overlap   += tr.dE_overlap;
             total_TE_error_collision += tr.dE_collision;
             total_TE_error_verlet    += tr.dE_verlet;
 
-            // Accumulate stage timing
-            total_collision_secs += tr.collision_seconds;
-            total_verlet_secs    += tr.verlet_seconds;
+            total_collision_secs     += tr.collision_seconds;
+            total_verlet_secs        += tr.verlet_seconds;
+            total_gravity_force_secs += tr.gravity_force_seconds;
+            total_integration_secs   += tr.integration_seconds;
+
             double iter_total = EngineCore::seconds_between(iter_t0, iter_t1);
-            // Exclude plotting time from overhead
-            // (Assume plotting is handled outside this timing, or add explicit timing if needed)
             total_other_secs += (iter_total - tr.collision_seconds - tr.verlet_seconds);
+
+            total_collision_checks += tr.collision_checks;
+            total_collision_hits   += tr.collision_hits;
+            total_gravity_pairs    += tr.gravity_pair_calcs;
 
             if (scenario->report_energy_per_step) {
                 double step_seconds = EngineCore::seconds_between(step_start_report, step_end_report);
@@ -314,7 +546,6 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
                 }
             }
         } else {
-            // No debug mode: run without trace (no energy tracking overhead)
             core.step(particles, nullptr);
         }
 
@@ -335,7 +566,6 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
                     m->TE = tr.TE;
                     m->relative_error = abs_hp(safe_rel_error(tr.TE, TE_initial));
 
-                    // Compute total momentum from current particle state
                     high_prec mx = 0.0, my = 0.0;
                     for (int pi = 0; pi < static_cast<int>(particles->particle_list.size()); ++pi) {
                         const auto& p = particles->particle_list[pi];
@@ -350,16 +580,22 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
             }
         }
 
-        // progress reporting: 5% buckets (compute pct only when needed)
         if (steps > 0 && (i + 1) >= next_report_step) {
             int pct_complete = (int)(((long long)(i + 1) * 100LL) / (long long)steps);
-            if (pct_complete > 100) pct_complete = 100;
-            if (pct_complete < 0) pct_complete = 0;
+            pct_complete = std::clamp(pct_complete, 0, 100);
 
             int pct_bucket = (pct_complete / 5) * 5;
             if (pct_bucket >= 0 && pct_bucket <= 100 && pct_bucket > last_reported_bucket) {
                 cout << pct_bucket << "% of the simulation complete." << endl;
                 last_reported_bucket = pct_bucket;
+
+                if (cache_enabled) {
+                    auto old_flags = cout.flags();
+                    auto old_prec  = cout.precision();
+                    cout << "  Cache written: " << std::fixed << std::setprecision(2) << check_mb(scenario) << " MB" << endl;
+                    cout.flags(old_flags);
+                    cout.precision(old_prec);
+                }
             }
 
             next_report_bucket = last_reported_bucket + 5;
@@ -367,7 +603,14 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
                 next_report_step = std::numeric_limits<int>::max();
             } else {
                 next_report_step = (int)(((long long)steps * (long long)next_report_bucket + 99LL) / 100LL);
-                if (next_report_step < (i + 2)) next_report_step = (i + 2); // keep it forward-moving
+                if (next_report_step < (i + 2)) next_report_step = (i + 2);
+            }
+        }
+
+        if (cache_enabled && kCacheFlushEverySteps > 0 && ((i + 1) % kCacheFlushEverySteps == 0)) {
+            if (!particle_states->snaps.empty()) {
+                run_to_cache(scenario, particle_states);
+                clear_particle_states_storage(particle_states);
             }
         }
     }
@@ -376,12 +619,8 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     double total_seconds = EngineCore::seconds_between(sim_start, sim_end);
     high_prec current_time_sec = total_seconds;
 
-    // Calculate final TE once after all steps complete (2nd and final TE calculation)
     TE_final = core.calc_TE(particles);
 
-    // =======================
-    // END-OF-SIM LOGGING
-    // =======================
     high_prec total_stage_sum = total_TE_error_overlap + total_TE_error_collision + total_TE_error_verlet;
     high_prec abs_stage_sum = abs_hp(total_TE_error_overlap) + abs_hp(total_TE_error_collision) + abs_hp(total_TE_error_verlet);
 
@@ -392,7 +631,7 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     high_prec dE_total = TE_final - TE_initial;
     high_prec dE_total_rel = abs_hp(safe_rel_error(TE_final, TE_initial));
-    high_prec dE_total_rel_pct = dE_total_rel * 100.0; // total relative TE error (%)
+    high_prec dE_total_rel_pct = dE_total_rel * 100.0;
 
     cout << endl;
     cout << "========================================" << endl;
@@ -404,7 +643,6 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
 
     cout << std::fixed << std::setprecision(15);
 
-    // --- Energy summary (always printed) ---
     cout << endl;
     cout << "--- Energy Summary ---" << endl;
     cout << "  Initial TE: " << TE_initial << endl;
@@ -415,37 +653,76 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
     else if (dE_total < 0.0) cout << "  Verdict:    ENERGY DECREASED" << endl;
     else                      cout << "  Verdict:    ENERGY UNCHANGED" << endl;
 
-    // --- Stage error breakdown (debug mode only) ---
     if (scenario->debug_mode) {
-           cout << endl;
-           cout << "--- Stage TE Error Breakdown (debug) ---" << endl;
-           cout << "  Sum of parts (signed): " << total_stage_sum << endl;
-           cout << "  Overlaps:   " << total_TE_error_overlap
-               << " (abs share " << pct_share(abs_hp(total_TE_error_overlap)) << "%" << endl;
-           cout << "  Collisions: " << total_TE_error_collision
-               << " (abs share " << pct_share(abs_hp(total_TE_error_collision)) << "%" << endl;
-           cout << "  Verlet:     " << total_TE_error_verlet
-               << " (abs share " << pct_share(abs_hp(total_TE_error_verlet)) << "%" << endl;
+        cout << endl;
+        cout << "--- Stage TE Error Breakdown (debug) ---" << endl;
+        cout << "  Sum of parts: " << total_stage_sum << endl;
+        cout << "  Collisions: " << total_TE_error_collision
+             << " (abs share " << pct_share(abs_hp(total_TE_error_collision)) << "%)" << endl;
+        cout << "  Verlet:     " << total_TE_error_verlet
+             << " (abs share " << pct_share(abs_hp(total_TE_error_verlet)) << "%)" << endl;
     }
 
-    // --- Stage timing breakdown (debug mode only) ---
     if (scenario->debug_mode) {
-        double timing_sum = total_collision_secs + total_verlet_secs + total_other_secs;
+        const double hit_pct = (total_collision_checks > 0)
+            ? (100.0 * (double)total_collision_hits / (double)total_collision_checks)
+            : 0.0;
+
+        const double avg_checks = (steps > 0) ? ((double)total_collision_checks / (double)steps) : 0.0;
+        const double avg_hits   = (steps > 0) ? ((double)total_collision_hits   / (double)steps) : 0.0;
+        const double avg_gpairs = (steps > 0) ? ((double)total_gravity_pairs    / (double)steps) : 0.0;
+
+        long long n2_pairs_per_step = (long long)initial_n_particles * (initial_n_particles - 1) / 2;
+        long long n2_pairs = n2_pairs_per_step * steps;
+        double bh_reduction = (n2_pairs > 0)
+            ? 100.0 * (1.0 - (double)total_gravity_pairs / (double)n2_pairs)
+            : 0.0;
+
+        cout << endl;
+        cout << "--- Work Counters (debug) ---" << endl;
+        cout << std::fixed << std::setprecision(2);
+
+        long long n2_collisions_per_step = n2_pairs_per_step;
+        long long n2_collisions = n2_collisions_per_step * steps;
+        double bh_collision_reduction = (n2_collisions > 0)
+            ? 100.0 * (1.0 - (double)total_collision_checks / (double)n2_collisions)
+            : 0.0;
+
+        cout << "  Collision checks (total): " << total_collision_checks
+             << " [O(n^2) = " << n2_collisions << ", BH reduction " << std::setprecision(1) << bh_collision_reduction << "%]" << endl;
+        cout << std::setprecision(2);
+        cout << "  Collisions (total):       " << total_collision_hits << " (" << hit_pct << "% of checks)" << endl;
+        cout << std::setprecision(1);
+        cout << "  Collision checks/step:    " << avg_checks << endl;
+        cout << "  Collisions/step:          " << avg_hits << endl;
+        cout << "  Gravity pair-forces/step: " << avg_gpairs << endl;
+        cout << std::setprecision(0);
+        cout << "  Gravity pair-forces total: " << total_gravity_pairs
+             << " [O(n^2) = " << n2_pairs << ", BH reduction " << std::setprecision(1) << bh_reduction << "%]" << endl;
+        cout << std::setprecision(0);
+    }
+
+    if (scenario->debug_mode) {
+        double timing_sum = total_collision_secs
+                          + total_gravity_force_secs
+                          + total_integration_secs
+                          + total_other_secs;
+
         auto timing_pct = [&](double part) -> double {
             return timing_sum > 0.0 ? (part / timing_sum) * 100.0 : 0.0;
         };
+
         cout << endl;
         cout << "--- Stage Timing Breakdown (debug) ---" << endl;
         cout << std::fixed << std::setprecision(4);
+
         cout << "  Collision handling: " << total_collision_secs << " s (" << timing_pct(total_collision_secs) << "%)" << endl;
-        cout << "  Velocity Verlet:    " << total_verlet_secs    << " s (" << timing_pct(total_verlet_secs)    << "%)" << endl;
+        cout << "  Gravity forces: " << total_gravity_force_secs << " s (" << timing_pct(total_gravity_force_secs) << "%)" << endl;
+        cout << "  Integration:    " << total_integration_secs   << " s (" << timing_pct(total_integration_secs)   << "%)" << endl;
         cout << "  Other (overhead):   " << total_other_secs     << " s (" << timing_pct(total_other_secs)     << "%)" << endl;
-        cout << "  Total timed:        " << timing_sum           << " s" << endl;
+        cout << "  Total timed:        " << timing_sum           << " s (" << 100.0 << "%)" << endl;
     }
 
-    // =======================
-    // BENCHMARK COMPARISON 
-    // =======================
     {
         high_prec bench_pct  = scenario->benchmark_te_error_pct;
         high_prec bench_time = scenario->benchmark_sim_time_sec;
@@ -480,47 +757,62 @@ shared_ptr<snapshots> Engine::run(shared_ptr<scenario> scenario, shared_ptr<Part
         }
     }
 
-    if (scenario->save_scenario) {
-        run_to_cache(scenario, particle_states);
+    if (cache_enabled) {
+        if (!particle_states->snaps.empty()) {
+            run_to_cache(scenario, particle_states);
+            clear_particle_states_storage(particle_states);
+        }
+        gCacheInitializedThisRun = false;
+        gCacheStepIdOffset       = 0;
+        gCacheMaxStepId          = -1;
     }
-    return particle_states;
+
+    
 }
 
-// =======================
-// CACHE I/O (WRAPPER)
-// =======================
-void Engine::run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states) {
+void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<snapshots> particle_states) {
     string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
 
-    ofstream file(file_name);
+    std::ios::openmode mode = std::ios::out;
+    if (gCacheInitializedThisRun) mode |= std::ios::app;
+    else                          mode |= std::ios::trunc;
+
+    ofstream file(file_name, mode);
     if (!file.is_open()) {
         cout << "Failed to write snapshots to cache!" << endl;
         return;
     }
 
     const int total_snaps = (int)particle_states->snaps.size();
-    const int n_particles = total_snaps > 0 ? (int)particle_states->snaps[0]->particle_list.size() : 0;
+    if (total_snaps <= 0) return;
+
+    const int n_particles = (int)particle_states->snaps[0]->particle_list.size();
     const int stride = std::max(1, kCacheWriteEveryN);
     const int written_snaps = (total_snaps + stride - 1) / stride;
     const double compression = total_snaps > 0 ? (1.0 - (double)written_snaps / total_snaps) * 100.0 : 0.0;
+
     cout << "Writing " << written_snaps << "/" << total_snaps << " states for " << n_particles
-         << " particles" << std::fixed << std::setprecision(1) << "("
-         << compression << "% reduction)" << endl;
+         << " particles" << std::fixed << std::setprecision(1)
+         << "(" << compression << "% reduction)" << endl;
 
     file << std::fixed << std::setprecision(15);
-    file << "step_id, particle_id,r,g,b,x,y,z,vx,vy,vz,m,rad,temp,rest\n";
+
+    if (!gCacheInitializedThisRun) {
+        CacheSchema::write_header(file);
+    }
+
+    const long long base_step_id = gCacheInitializedThisRun ? gCacheStepIdOffset : 0LL;
 
     int last_reported_bucket = -5;
     int next_report_step = 0;
     int written = 0;
 
     for (int i = 0; i < total_snaps; i += stride) {
-        // 5% progress reporting (based on written count)
         if (written_snaps > 0 && written >= next_report_step) {
             int pct = (int)(((long long)(written + 1) * 100LL) / (long long)written_snaps);
             int bucket = (pct / 20) * 20;
             if (bucket > last_reported_bucket) {
-                cout << "  " << bucket << "%" << endl;
+                //cout << "  " << bucket << "%" << endl;
                 last_reported_bucket = bucket;
             }
             int nb = last_reported_bucket + 5;
@@ -529,36 +821,21 @@ void Engine::run_to_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> p
         }
         ++written;
 
+        const long long step_id = base_step_id + (long long)i;
+
         for (int j = 0; j < (int)particle_states->snaps[i]->particle_list.size(); j++) {
-            const auto& p = particle_states->snaps[i]->particle_list[j];
-            
-            // Check for negative temperature before writing
-            // if (p->temp < 0) {
-            //     cout << "Negative temperature detected for particle " << p->particle_id
-            //          << " at step " << i << ". Pausing for user input." << endl;
-            //     pause_for_user();
-            // }
-            
-            file << i << ","
-                << p->particle_id << ","
-                << p->r << ","
-                << p->g << ","
-                << p->b << ","
-                << p->x << ","
-                << p->y << ","
-                << p->z << ","
-                << p->vx << ","
-                << p->vy << ","
-                << p->vz << ","
-                << p->m << ","
-                << p->rad << ","
-                << p->temp << ","
-                << p->rest << '\n';
+            const auto& sp = particle_states->snaps[i]->particle_list[j];
+            if (!sp) continue;
+            CacheSchema::write_row(file, step_id, *sp);
         }
     }
 
     file.close();
     cout << "Snapshots saved to " << file_name << endl;
+
+    if (gCacheInitializedThisRun) {
+        gCacheStepIdOffset += (long long)total_snaps;
+    }
 }
 
 bool Engine::cache_exists(shared_ptr<scenario> scenario) {
@@ -578,45 +855,135 @@ shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
     shared_ptr<snapshots> particle_states = make_shared<snapshots>();
 
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
-    typedef io::double_quote_escape<',', '\"'> QuotePolicy;
-    const int column_count = 15;
-    io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(file_name);
+    typedef io::double_quote_escape<',', '"'> QuotePolicy;
 
-    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15;
-    int step_id = 0;
+    io::CSVReader<CacheSchema::kColumnCount, TrimPolicy, QuotePolicy> in(file_name);
+    CacheSchema::read_header(in);
 
+    CacheSchema::Row row;
+
+    bool have_any = false;
+    long long current_step_id = 0;
     unique_ptr<Particles> particles = make_unique<Particles>();
 
-    in.read_header(io::ignore_extra_column, "step_id", "particle_id", "r", "g", "b", "x", "y", "z",
-                   "vx", "vy", "vz", "m", "rad", "rest", "temp");
+    long long step_count = 0;
+    long long progressStep = 0;
+    long long total_steps = 0;
 
-    while (in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10,
-                       col11, col12, col13, col14, col15)) {
-        if (stoi(col1) != step_id) {
+    // First pass: count total steps
+    {
+        io::CSVReader<CacheSchema::kColumnCount, TrimPolicy, QuotePolicy> count_in(file_name);
+        CacheSchema::read_header(count_in);
+        CacheSchema::Row count_row;
+        long long last_step_id = -1;
+        while (count_in.read_row(
+            count_row.step_id,
+            count_row.particle_id,
+            count_row.r, count_row.g, count_row.b,
+            count_row.x, count_row.y, count_row.z,
+            count_row.vx, count_row.vy, count_row.vz,
+            count_row.m,
+            count_row.rad,
+            count_row.temp,
+            count_row.rest)) {
+            long long sid = CacheSchema::parse_step_id(count_row);
+            if (sid != last_step_id) {
+                ++total_steps;
+                last_step_id = sid;
+            }
+        }
+        progressStep = total_steps / 4; // 5% increments
+        if (progressStep < 1) progressStep = 1;
+    }
+
+    // Second pass: actual reading
+    long long current_progress = 0;
+    while (in.read_row(
+        row.step_id,
+        row.particle_id,
+        row.r, row.g, row.b,
+        row.x, row.y, row.z,
+        row.vx, row.vy, row.vz,
+        row.m,
+        row.rad,
+        row.temp,
+        row.rest))
+    {
+        const long long sid = CacheSchema::parse_step_id(row);
+
+        if (!have_any) {
+            have_any = true;
+            current_step_id = sid;
+            ++step_count;
+            current_progress = step_count;
+            if (progressStep > 0 && (current_progress % progressStep == 0)) {
+                std::cout << "Cache loading " << (current_progress * 100) / total_steps << "% complete." << std::endl;
+            }
+        } else if (sid != current_step_id) {
             particle_states->snaps.push_back(std::move(particles));
             particles = make_unique<Particles>();
-            step_id = stoi(col1);
+            current_step_id = sid;
+            ++step_count;
+            current_progress = step_count;
+            if (progressStep > 0 && (current_progress % progressStep == 0)) {
+                std::cout << "Cache loading " << (current_progress * 100) / total_steps << "% complete." << std::endl;
+            }
         }
 
         shared_ptr<Particle> particle = make_shared<Particle>();
-        particle->particle_id = stoi(col2);
-        particle->r = stod(col3);
-        particle->g = stod(col4);
-        particle->b = stod(col5);
-        particle->x = stod(col6);
-        particle->y = stod(col7);
-        particle->z = stod(col8);
-        particle->vx = stod(col9);
-        particle->vy = stod(col10);
-        particle->vz = stod(col11);
-        particle->m = stod(col12);
-        particle->rad = stod(col13);
-        particle->rest = stod(col14);
-        particle->temp = stod(col15);
-
+        CacheSchema::parse_particle_fields(row, *particle);
         particles->particle_list.push_back(particle);
+
     }
 
-    particle_states->snaps.push_back(std::move(particles));
+    if (have_any) {
+        particle_states->snaps.push_back(std::move(particles));
+    }
+
     return particle_states;
+}
+
+void Engine::inspect_cache(const std::string& name_or_path) {
+    const std::string file_name = cache_file_from_name_or_path(name_or_path);
+
+    {
+        std::ifstream f(file_name);
+        if (!f.is_open()) {
+            std::cout << "Cache file not found/unreadable: " << file_name << std::endl;
+            gCacheMaxStepId = -1;
+            return;
+        }
+    }
+
+    typedef io::trim_chars<' ', '\t'> TrimPolicy;
+    typedef io::double_quote_escape<',', '\"'> QuotePolicy;
+
+    io::CSVReader<CacheSchema::kColumnCount, TrimPolicy, QuotePolicy> in(file_name);
+    CacheSchema::read_header(in);
+
+    CacheSchema::Row row;
+    long long max_value = std::numeric_limits<long long>::min();
+
+    while (in.read_row(
+        row.step_id,
+        row.particle_id,
+        row.r, row.g, row.b,
+        row.x, row.y, row.z,
+        row.vx, row.vy, row.vz,
+        row.m,
+        row.rad,
+        row.temp,
+        row.rest))
+    {
+        long long val = CacheSchema::parse_step_id(row);
+        if (val > max_value) max_value = val;
+    }
+
+    if (max_value == std::numeric_limits<long long>::min()) {
+        std::cout << "Cache file is empty or unreadable: " << file_name << std::endl;
+        gCacheMaxStepId = -1;
+    } else {
+        
+        gCacheMaxStepId = max_value;
+    }
 }
