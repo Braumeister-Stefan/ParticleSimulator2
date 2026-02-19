@@ -47,8 +47,11 @@ static const int  kCacheFlushEverySteps = 5000;   // flush every N simulation ti
 // INCREMENTAL CACHE STATE (per run, file-scope)
 // =======================
 static bool      gCacheInitializedThisRun = false;
-static long long gCacheStepIdOffset       = 0;
+static long long gCacheStepIdOffset       = 0;     // (kept as-is; no longer used to generate step_id values)
 static long long gCacheMaxStepId          = -1;
+
+// Per-snapshot true simulation step ids (kept in sync with particle_states->snaps)
+static std::vector<long long> gCacheSnapStepIds;
 
 static inline std::string cache_file_from_name_or_path(const std::string& name_or_path) {
     std::string file_name = name_or_path;
@@ -331,6 +334,7 @@ static inline void clear_particle_states_storage(shared_ptr<snapshots> particle_
     if (!particle_states) return;
     particle_states->snaps.clear();
     particle_states->metrics.clear();
+    gCacheSnapStepIds.clear();
 }
 
 double Engine::check_mb(shared_ptr<scenario> scenario) {
@@ -418,6 +422,8 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
     cout << "Engine (Wrapper) is initialized." << endl;
 
     shared_ptr<snapshots> particle_states = make_shared<snapshots>();
+    gCacheSnapStepIds.clear();
+
     cout << scenario->name << "'s initial states loaded" << endl << endl;
 
     cout << "Press enter to start the simulation." << endl;
@@ -431,12 +437,35 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
     int steps = static_cast<int>(steps_db);
     cout << "Number of steps to be simulated: " << steps << endl << endl;
 
-
     int start_iter = 0;
 
+    bool cache_enabled = true; // WIP. User should have choice to ignore cached files and start fresh, or look for it.
     bool cache_exists_flag = cache_exists(scenario);
 
-    bool cache_enabled = true; // WIP. User should have choice to ignore cached files and start fresh, or look for it.
+    // ============================================================
+    // NEW: If try_cache == false, delete any existing cache and
+    //      reinitialize from scratch.
+    // ============================================================
+    if (cache_enabled && !scenario->try_cache) {
+        if (cache_exists_flag) {
+            const std::string file_name = "Inputs/rendered_scenarios/" + scenario->name + ".csv";
+            try {
+                std::filesystem::remove(file_name);
+                cout << "try_cache=false: Deleted existing cache file: " << file_name << endl;
+            } catch (...) {
+                // best-effort; initiate_cache will still attempt trunc/create
+                cout << "try_cache=false: Failed to delete cache file (will reinit anyway): " << file_name << endl;
+            }
+            cache_exists_flag = false;
+        }
+
+        // Ensure we start from scratch regardless
+        start_iter = 0;
+        gCacheMaxStepId = -1;
+        gCacheInitializedThisRun = false;
+        gCacheStepIdOffset = 0;
+        gCacheSnapStepIds.clear();
+    }
 
     if (cache_enabled && !cache_exists_flag) {
         cache_enabled = initiate_cache(scenario);
@@ -457,7 +486,7 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
                 gCacheStepIdOffset       = static_cast<long long>(start_iter);
 
                 cout << "Restored up to " << gCacheMaxStepId << endl;
-                     
+
             } else {
                 cout << "Failed to load cached step_id " << gCacheMaxStepId
                      << ". Starting from step 0." << endl;
@@ -474,6 +503,7 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
         const int expected_snaps = (window_steps + write_k_frames - 1) / write_k_frames;
         particle_states->snaps.reserve(static_cast<size_t>(expected_snaps));
         particle_states->metrics.reserve(static_cast<size_t>(expected_snaps));
+        gCacheSnapStepIds.reserve(static_cast<size_t>(expected_snaps));
     }
 
     high_prec TE_initial = core.calc_TE(particles);
@@ -492,7 +522,6 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
     int next_report_step     = std::numeric_limits<int>::max();
 
     if (steps > 0) {
-        //cout << "0% of the simulation complete." << endl;
         last_reported_bucket = 0;
         next_report_bucket   = 5;
         next_report_step     = (int)(((long long)steps * (long long)next_report_bucket + 99LL) / 100LL);
@@ -553,6 +582,7 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
             const bool should_write = ((i + 1) % write_k_frames == 0) || (i == steps - 1);
             if (should_write) {
                 particle_states->snaps.push_back(make_light_snapshot(*particles));
+                gCacheSnapStepIds.push_back((long long)i);
 
                 auto m = make_shared<test_metrics_t>();
                 m->margin_TE_error = core.get_margin_TE_error();
@@ -765,9 +795,8 @@ void Engine::run(shared_ptr<scenario> scenario, shared_ptr<Particles> particles)
         gCacheInitializedThisRun = false;
         gCacheStepIdOffset       = 0;
         gCacheMaxStepId          = -1;
+        gCacheSnapStepIds.clear();
     }
-
-    
 }
 
 void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<snapshots> particle_states) {
@@ -791,17 +820,13 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
     const int written_snaps = (total_snaps + stride - 1) / stride;
     const double compression = total_snaps > 0 ? (1.0 - (double)written_snaps / total_snaps) * 100.0 : 0.0;
 
-    cout << "Writing " << written_snaps << "/" << total_snaps << " states for " << n_particles
-         << " particles" << std::fixed << std::setprecision(1)
-         << "(" << compression << "% reduction)" << endl;
+    
 
     file << std::fixed << std::setprecision(15);
 
     if (!gCacheInitializedThisRun) {
         CacheSchema::write_header(file);
     }
-
-    const long long base_step_id = gCacheInitializedThisRun ? gCacheStepIdOffset : 0LL;
 
     int last_reported_bucket = -5;
     int next_report_step = 0;
@@ -812,7 +837,6 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
             int pct = (int)(((long long)(written + 1) * 100LL) / (long long)written_snaps);
             int bucket = (pct / 20) * 20;
             if (bucket > last_reported_bucket) {
-                //cout << "  " << bucket << "%" << endl;
                 last_reported_bucket = bucket;
             }
             int nb = last_reported_bucket + 5;
@@ -821,7 +845,10 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
         }
         ++written;
 
-        const long long step_id = base_step_id + (long long)i;
+        const long long step_id =
+            (i >= 0 && i < (int)gCacheSnapStepIds.size())
+                ? gCacheSnapStepIds[(size_t)i]
+                : (long long)i;
 
         for (int j = 0; j < (int)particle_states->snaps[i]->particle_list.size(); j++) {
             const auto& sp = particle_states->snaps[i]->particle_list[j];
@@ -831,7 +858,7 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
     }
 
     file.close();
-    cout << "Snapshots saved to " << file_name << endl;
+    
 
     if (gCacheInitializedThisRun) {
         gCacheStepIdOffset += (long long)total_snaps;
@@ -933,7 +960,6 @@ shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
         shared_ptr<Particle> particle = make_shared<Particle>();
         CacheSchema::parse_particle_fields(row, *particle);
         particles->particle_list.push_back(particle);
-
     }
 
     if (have_any) {
@@ -983,7 +1009,6 @@ void Engine::inspect_cache(const std::string& name_or_path) {
         std::cout << "Cache file is empty or unreadable: " << file_name << std::endl;
         gCacheMaxStepId = -1;
     } else {
-        
         gCacheMaxStepId = max_value;
     }
 }
