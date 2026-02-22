@@ -288,7 +288,12 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
         
     }
 
-    //return the particles struct
+    // Reset particle_id for all particles
+    for (int i = 0; i < static_cast<int>(particles->particle_list.size()); ++i) {
+        if (particles->particle_list[i]) {
+            particles->particle_list[i]->particle_id = i;
+        }
+    }
 
     return particles;
 

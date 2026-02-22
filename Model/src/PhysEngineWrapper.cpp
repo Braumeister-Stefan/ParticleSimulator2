@@ -40,7 +40,7 @@ static const int  kStepPauseInterval = 100;
 // =======================
 // CACHE CONFIG
 // =======================
-static const int  kCacheWriteEveryN     = 20;     // Save every Nth snapshot within a flush chunk
+static const int  kCacheWriteEveryN     = 500;     // Save every Nth snapshot within a flush chunk
 static const int  kCacheFlushEverySteps = 5000;   // flush every N simulation timesteps
 
 // =======================
@@ -972,43 +972,251 @@ shared_ptr<snapshots> Engine::run_from_cache(shared_ptr<scenario> scenario) {
 void Engine::inspect_cache(const std::string& name_or_path) {
     const std::string file_name = cache_file_from_name_or_path(name_or_path);
 
-    {
-        std::ifstream f(file_name);
-        if (!f.is_open()) {
-            std::cout << "Cache file not found/unreadable: " << file_name << std::endl;
-            gCacheMaxStepId = -1;
-            return;
-        }
+    // Basic open check
+    std::ifstream fin(file_name, std::ios::binary);
+    if (!fin.is_open()) {
+        std::cout << "Cache file not found/unreadable: " << file_name << std::endl;
+        gCacheMaxStepId = -1;
+        return;
     }
 
+    long long old_bytes = 0;
+    try { old_bytes = (long long)std::filesystem::file_size(file_name); }
+    catch (...) { old_bytes = 0; }
+
+    // Read header
+    std::string line;
+    if (!std::getline(fin, line)) {
+        std::cout << "Cache file is empty or unreadable: " << file_name << std::endl;
+        gCacheMaxStepId = -1;
+        return;
+    }
+
+    auto strip_cr = [&](std::string& s) {
+        if (!s.empty() && s.back() == '\r') s.pop_back();
+    };
+    strip_cr(line);
+
+    // Parse step_id from prefix up to first comma (robust, trims spaces/tabs)
+    auto parse_step_prefix = [&](const std::string& s, long long& out_sid) -> bool {
+        const size_t comma = s.find(',');
+        if (comma == std::string::npos) return false;
+
+        size_t a = 0;
+        while (a < comma && (s[a] == ' ' || s[a] == '\t')) ++a;
+
+        size_t b = comma;
+        while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t')) --b;
+
+        if (a >= b) return false;
+
+        try {
+            out_sid = std::stoll(s.substr(a, b - a));
+            return true;
+        } catch (...) {
+            return false;
+        }
+    };
+
+    const int expected_cols = CacheSchema::kColumnCount;
+
+    bool corrupt_found = false;
+    long long corrupt_step_id = -1;
+    long long corrupt_line_no = -1;
+
+    bool any_good = false;
+    long long last_good_step_id = -1;
+    long long max_step_id = std::numeric_limits<long long>::min();
+
+    long long line_no = 1; // header line
+    while (std::getline(fin, line)) {
+        ++line_no;
+        strip_cr(line);
+
+        // Ignore blank lines (don’t treat trailing blank as corruption)
+        if (line.empty()) continue;
+
+        const int cols = 1 + (int)std::count(line.begin(), line.end(), ',');
+        long long sid = 0;
+        const bool sid_ok = parse_step_prefix(line, sid);
+
+        if (cols != expected_cols) {
+            corrupt_found = true;
+            corrupt_line_no = line_no;
+
+            if (sid_ok) {
+                corrupt_step_id = sid;
+            } else if (last_good_step_id >= 0) {
+                corrupt_step_id = last_good_step_id + 1;
+            } else {
+                corrupt_step_id = -1;
+            }
+            break;
+        }
+
+        if (sid_ok) {
+            any_good = true;
+            last_good_step_id = sid;
+            if (sid > max_step_id) max_step_id = sid;
+        }
+    }
+    fin.close();
+
+    // If no corruption: just set max and return (same semantics as before)
+    if (!corrupt_found) {
+        if (!any_good || max_step_id == std::numeric_limits<long long>::min()) {
+            std::cout << "Cache file is empty or unreadable: " << file_name << std::endl;
+            gCacheMaxStepId = -1;
+        } else {
+            gCacheMaxStepId = max_step_id;
+        }
+        return;
+    }
+
+    // If we cannot determine the corrupt timestep safely, DO NOT overwrite.
+    if (corrupt_step_id < 0) {
+        std::cout << "CACHE CORRUPTION DETECTED but could not determine cutoff step_id. "
+                  << "File left unchanged. first_bad_line=" << corrupt_line_no
+                  << " file=" << file_name << std::endl;
+        // best effort: keep existing max (may be unreliable if file corrupt)
+        gCacheMaxStepId = (any_good && max_step_id != std::numeric_limits<long long>::min()) ? max_step_id : -1;
+        return;
+    }
+
+    std::cout << "CACHE CORRUPTION DETECTED: file=" << file_name
+              << " first_bad_line=" << corrupt_line_no
+              << " cutoff_step_id(exclusive)=" << corrupt_step_id << std::endl;
+
+    // Rebuild using the normal grouped-by-step semantics up to (excluding) corrupt_step_id
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    io::CSVReader<CacheSchema::kColumnCount, TrimPolicy, QuotePolicy> in(file_name);
-    CacheSchema::read_header(in);
+    const std::string tmp_name = file_name + ".tmp_repair";
 
-    CacheSchema::Row row;
-    long long max_value = std::numeric_limits<long long>::min();
-
-    while (in.read_row(
-        row.step_id,
-        row.particle_id,
-        row.r, row.g, row.b,
-        row.x, row.y, row.z,
-        row.vx, row.vy, row.vz,
-        row.m,
-        row.rad,
-        row.temp,
-        row.rest))
-    {
-        long long val = CacheSchema::parse_step_id(row);
-        if (val > max_value) max_value = val;
-    }
-
-    if (max_value == std::numeric_limits<long long>::min()) {
-        std::cout << "Cache file is empty or unreadable: " << file_name << std::endl;
+    std::ofstream out(tmp_name, std::ios::out | std::ios::trunc);
+    if (!out.is_open()) {
+        std::cout << "Failed to create temp repair cache: " << tmp_name << std::endl;
         gCacheMaxStepId = -1;
-    } else {
-        gCacheMaxStepId = max_value;
+        return;
     }
+    out << std::fixed << std::setprecision(15);
+    CacheSchema::write_header(out);
+
+    std::shared_ptr<snapshots> repaired_states = std::make_shared<snapshots>(); // as requested
+    CacheSchema::Row row;
+
+    long long last_written_step = -1;
+    bool have_step = false;
+    long long current_step = -1;
+    std::unique_ptr<Particles> current_particles = std::make_unique<Particles>();
+
+    auto flush_step = [&](long long sid) {
+        if (!have_step) return;
+
+        // Store in a snapshots object "the usual way" (Particles per step)
+        repaired_states->snaps.push_back(std::move(current_particles));
+
+        // Write that step out
+        const auto& snap = repaired_states->snaps.back();
+        for (int j = 0; j < (int)snap->particle_list.size(); ++j) {
+            const auto& sp = snap->particle_list[j];
+            if (!sp) continue;
+            CacheSchema::write_row(out, sid, *sp);
+        }
+
+        last_written_step = sid;
+
+        // Keep memory bounded while still using snapshots structure
+        repaired_states->snaps.clear();
+        current_particles = std::make_unique<Particles>();
+    };
+
+    try {
+        io::CSVReader<CacheSchema::kColumnCount, TrimPolicy, QuotePolicy> in(file_name);
+        CacheSchema::read_header(in);
+
+        while (in.read_row(
+            row.step_id,
+            row.particle_id,
+            row.r, row.g, row.b,
+            row.x, row.y, row.z,
+            row.vx, row.vy, row.vz,
+            row.m,
+            row.rad,
+            row.temp,
+            row.rest))
+        {
+            const long long sid = CacheSchema::parse_step_id(row);
+            if (sid >= corrupt_step_id) break;
+
+            if (!have_step) {
+                have_step = true;
+                current_step = sid;
+            } else if (sid != current_step) {
+                flush_step(current_step);
+                current_step = sid;
+            }
+
+            auto p = std::make_shared<Particle>();
+            CacheSchema::parse_particle_fields(row, *p);
+            current_particles->particle_list.push_back(p);
+        }
+    } catch (...) {
+        // If the CSV reader trips on the corrupted line, that's OK: we stop where we are.
+        // The requirement is "up to but excluding this timestep".
+    }
+
+    if (have_step && current_step >= 0 && current_step < corrupt_step_id) {
+        flush_step(current_step);
+    }
+
+    out.close();
+
+
+    // Replace original with repaired
+    bool replaced = false;
+    try {
+        std::filesystem::remove(file_name);
+    } catch (...) {}
+
+    try {
+        std::filesystem::rename(tmp_name, file_name);
+        replaced = true;
+    } catch (...) {
+        try {
+            std::filesystem::copy_file(tmp_name, file_name,
+                                       std::filesystem::copy_options::overwrite_existing);
+            std::filesystem::remove(tmp_name);
+            replaced = true;
+        } catch (...) {
+            replaced = false;
+        }
+    }
+
+    if (!replaced) {
+        std::cout << "FAILED to replace cache with repaired version. Temp remains: " << tmp_name << std::endl;
+        gCacheMaxStepId = -1;
+        return;
+    }
+
+    long long new_bytes = 0;
+    try { new_bytes = (long long)std::filesystem::file_size(file_name); }
+    catch (...) { new_bytes = 0; }
+
+    double pct_deleted = 0.0;
+    if (old_bytes > 0 && new_bytes >= 0 && new_bytes <= old_bytes) {
+        pct_deleted = (1.0 - (double)new_bytes / (double)old_bytes) * 100.0;
+    }
+
+    gCacheMaxStepId = last_written_step;
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "CACHE REPAIRED: deleted ~" << pct_deleted << "% due to corruption." << std::endl;
+    std::cout << "Rewritten cache saved: " << file_name << std::endl;
+
+    std::cout << "Press Enter to exit..." << std::endl;
+    std::string _;
+    std::getline(std::cin >> std::ws, _);
+
+    throw std::runtime_error("Cache repaired due to corruption. Please restart the program.");
 }
