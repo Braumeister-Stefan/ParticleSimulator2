@@ -6,6 +6,10 @@
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
+#include <chrono>
+#include "../include/PhysEngineCore.h"
+
+constexpr bool plot_debugmode = true; // Set to false to disable timing log
 #include <limits>
 
 #include "../include/ParticlePlotter.h"
@@ -182,6 +186,11 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
 
 void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_t> metrics_t) {
 
+    EngineCore::clock_t::time_point t_total_start, t_build_end, t_io_end;
+    if (plot_debugmode) {
+        t_total_start = EngineCore::clock_t::now();
+    }
+
     // Batch all gnuplot commands into a single string to minimize pipe write syscalls
     std::string buf;
     buf.reserve(particles->particle_list.size() * 48 + 512);
@@ -200,7 +209,6 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     buf += "e\n";
 
-    // N label is set once in plot_run (never changes)
     // Energy/momentum labels only in debug mode
     if (debug_mode_) {
         snprintf(line, sizeof(line), "set label 3 'KE  = %.4e' at screen 0.01,0.85 font 'Consolas,9' textcolor rgb 'white'\n",
@@ -222,7 +230,6 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
                 static_cast<double>(metrics_t->mom_y));
         buf += line;
 
-        // Show relative TE error with color coding
         double rel_err = static_cast<double>(metrics_t->relative_error);
         const char* err_color = (rel_err < 0.001) ? "#00FF00" : (rel_err < 0.01) ? "#FFFF00" : "#FF4444";
         snprintf(line, sizeof(line), "set label 9 'TE err = %.6e' at screen 0.01,0.54 font 'Consolas,9' textcolor rgb '%s'\n",
@@ -230,8 +237,26 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
         buf += line;
     }
 
+    if (plot_debugmode) {
+        t_build_end = EngineCore::clock_t::now();
+    }
+
+    // ---- GNUplot interaction: write + flush to the gnuplot pipe ----
     fwrite(buf.data(), 1, buf.size(), gnuplotPipe);
     fflush(gnuplotPipe);
+
+    if (plot_debugmode) {
+        t_io_end = EngineCore::clock_t::now();
+
+        const double total_s = EngineCore::seconds_between(t_total_start, t_io_end);
+        const double io_s    = EngineCore::seconds_between(t_build_end,   t_io_end);
+
+        const double io_pct = (total_s > 0.0) ? (io_s / total_s) * 100.0 : 0.0;
+
+        std::cout << "plot_GNU took " << total_s
+                  << " seconds (" << io_pct << "% due to GNUplot interaction)"
+                  << std::endl;
+    }
 }
 
 void Plotter::close_GNU() {
