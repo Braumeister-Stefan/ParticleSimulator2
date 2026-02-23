@@ -7,10 +7,13 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+#include <limits>
+#include <cstdlib>
+#include <string>
+
 #include "../include/PhysEngineCore.h"
 
-constexpr bool plot_debugmode = true; // Set to false to disable timing log
-#include <limits>
+constexpr bool plot_debugmode = false; // Set to false to disable timing log
 
 #include "../include/ParticlePlotter.h"
 #include "../include/InitStructs.h"
@@ -33,21 +36,21 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
     apply_heat_brightness_and_pack_rgb(particle_states, scenario);
 
+    // ---- OFFLINE render setup ----
     init_GNU(scenario);
-    plot_GNU(particle_states->snaps[0], particle_states->metrics[0]);
 
-    // Set N label once (particle count never changes)
+    // Set N label once (particle count never changes).
+    // IMPORTANT: For animated GIF, anything you want visible in the FIRST frame must be sent BEFORE the first plot.
     fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n",
             static_cast<int>(particle_states->snaps[0]->particle_list.size()));
-    fprintf(gnuplotPipe, "set label 1 'Step: 0' at screen 0.01,0.95 textcolor rgb 'white'\n");
-    fflush(gnuplotPipe);
+
+    // Initial step label (frame 0)
+    current_step_label_ = 0;
 
     cout << "............................................" << endl;
-    cout << "Ready to plot scenario:" << scenario->name << endl;
+    cout << "Offline rendering scenario: " << scenario->name << endl;
+    cout << "Output: " << offline_output_path_ << endl;
     cout << "............................................" << endl;
-    cout << "Press enter to start." << endl;
-    cin.ignore();
-    cin.get();
 
     int step = static_cast<int>(1.0 / static_cast<double>(scenario->dt)) * scenario->plot_speed_multiplier;
     if (step < 1) step = 1;
@@ -57,27 +60,39 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     cout << "Playback: " << scenario->plot_speed_multiplier << "x speed (step " << step << " vs base " << base_step << ")" << endl;
 
     const int n = static_cast<int>(particle_states->snaps.size());
-    const int totalIters = (n + step - 1) / step; // how many loop iterations will run
+    const int totalIters = (n + step - 1) / step;
 
+    // Render the initial frame explicitly (keeps behavior close to your current flow)
+    plot_GNU(particle_states->snaps[0], particle_states->metrics[0]);
+
+    // Render remaining frames (including the original behavior that starts loop at i=0)
     for (int i = 0; i < n; i += step) {
         int iter = i / step; // 0..totalIters-1
 
         int progressStep = totalIters / 10;
         if (progressStep > 0 && (iter % progressStep == 0)) {
-            cout << "Simulation " << (iter * 100) / totalIters << "% complete." << endl;
+            cout << "Rendering " << (iter * 100) / totalIters << "% complete." << endl;
         }
 
-        plot_GNU(particle_states->snaps[i], particle_states->metrics[i]);
+        // Match your prior label update logic: "Step: i+1" in the loop
+        current_step_label_ = i + 1;
 
-        fprintf(gnuplotPipe, "set label 1 'Step: %d' at screen 0.01,0.95 textcolor rgb 'white'\n", i + 1);
-        fflush(gnuplotPipe);
+        plot_GNU(particle_states->snaps[i], particle_states->metrics[i]);
     }
 
-    cout << "Simulation completed. Close the plot window or press enter to exit." << endl;
-    cin.ignore();
-    cin.get();
+    // Close the output file to finalize the GIF, then quit gnuplot
+    fprintf(gnuplotPipe, "set output\n");
+    fprintf(gnuplotPipe, "quit\n");
+    fflush(gnuplotPipe);
+
     close_GNU();
+
+    cout << "Offline rendering completed." << endl;
+
+    // ---- Autoplay after render completes ----
+    playback_offline(offline_output_path_);
 }
+
 void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, shared_ptr<scenario> scenario) {
 
     // Config: cutoff, gamma
@@ -108,7 +123,6 @@ void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, sh
             }
         }
     };
-
 
     // If max temperature is very low, skip heating effect
     if (max_temp < 0.00001) {
@@ -163,22 +177,36 @@ void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, sh
     }
 }
 
-
-
 void Plotter::init_GNU(shared_ptr<scenario> scenario) {
-    cout << "Initializing GNU" << endl;
+    cout << "Initializing GNU (offline GIF renderer)" << endl;
 
-    gnuplotPipe = popen("gnuplot -persistent", "w");
+    // Output path: keep alongside your existing rendered_scenarios assets
+    offline_output_path_ = "Inputs/rendered_scenarios/" + scenario->name + ".gif";
+
+    // No need for -persistent when writing to file, but leaving it would also work.
+    gnuplotPipe = popen("gnuplot", "w");
+    if (!gnuplotPipe) {
+        cout << "ERROR: Failed to start gnuplot process." << endl;
+        return;
+    }
 
     string scenario_name = scenario->name;
     replace(scenario_name.begin(), scenario_name.end(), '_', ' ');
 
-    fprintf(gnuplotPipe, "set title '%s' font 'Arial Bold,16' textcolor rgb 'white'\n", scenario_name.c_str());
-    fprintf(gnuplotPipe, "set xrange [-100:100]\n");
-    fprintf(gnuplotPipe, "set yrange [-100:100]\n");
+    // Animated GIF: each "plot" command becomes one frame
+    // delay is in 1/100 sec units (delay 4 => 0.04s => 25 fps nominal)
+    fprintf(gnuplotPipe, "set terminal gif animate optimize delay 4 loop 0 size 1000,1000\n");
+    fprintf(gnuplotPipe, "set output '%s'\n", offline_output_path_.c_str());
+
+    // Background (terminal-independent): rectangle behind everything
+    fprintf(gnuplotPipe, "set object 1 rectangle from screen 0,0 to screen 1,1 behind fillcolor rgb '#000000' fillstyle solid 1.0\n");
+
+    // Keep your plotting setup
+    fprintf(gnuplotPipe, "set title '%s' textcolor rgb 'white'\n", scenario_name.c_str());
+    fprintf(gnuplotPipe, "set xrange [-1000:1000]\n");
+    fprintf(gnuplotPipe, "set yrange [-1000:1000]\n");
     fprintf(gnuplotPipe, "set size ratio -1\n");
     fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
-    fprintf(gnuplotPipe, "set terminal wxt noraise background '#000000'\n");
     fprintf(gnuplotPipe, "unset key\n");
 
     fflush(gnuplotPipe);
@@ -193,8 +221,58 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 
     // Batch all gnuplot commands into a single string to minimize pipe write syscalls
     std::string buf;
-    buf.reserve(particles->particle_list.size() * 48 + 512);
+    buf.reserve(particles->particle_list.size() * 48 + 1024);
 
+    // IMPORTANT for offline animation:
+    // Labels must be set BEFORE the plot command so they appear in the same frame.
+    {
+        char line[256];
+        snprintf(line, sizeof(line),
+                 "set label 1 'Step: %d' at screen 0.01,0.95 textcolor rgb 'white'\n",
+                 current_step_label_);
+        buf += line;
+
+        if (debug_mode_) {
+            snprintf(line, sizeof(line),
+                     "set label 3 'KE  = %.4e' at screen 0.01,0.85 font 'Consolas,9' textcolor rgb 'white'\n",
+                     static_cast<double>(metrics_t->KE));
+            buf += line;
+
+            snprintf(line, sizeof(line),
+                     "set label 4 'PE  = %.4e' at screen 0.01,0.80 font 'Consolas,9' textcolor rgb 'white'\n",
+                     static_cast<double>(metrics_t->PE));
+            buf += line;
+
+            snprintf(line, sizeof(line),
+                     "set label 5 'HE  = %.4e' at screen 0.01,0.75 font 'Consolas,9' textcolor rgb 'white'\n",
+                     static_cast<double>(metrics_t->HE));
+            buf += line;
+
+            snprintf(line, sizeof(line),
+                     "set label 6 'TE  = %.4e' at screen 0.01,0.70 font 'Consolas,9' textcolor rgb 'white'\n",
+                     static_cast<double>(metrics_t->TE));
+            buf += line;
+
+            snprintf(line, sizeof(line),
+                     "set label 7 'Px  = %.4e' at screen 0.01,0.65 font 'Consolas,9' textcolor rgb 'white'\n",
+                     static_cast<double>(metrics_t->mom_x));
+            buf += line;
+
+            snprintf(line, sizeof(line),
+                     "set label 8 'Py  = %.4e' at screen 0.01,0.60 font 'Consolas,9' textcolor rgb 'white'\n",
+                     static_cast<double>(metrics_t->mom_y));
+            buf += line;
+
+            double rel_err = static_cast<double>(metrics_t->relative_error);
+            const char* err_color = (rel_err < 0.001) ? "#00FF00" : (rel_err < 0.01) ? "#FFFF00" : "#FF4444";
+            snprintf(line, sizeof(line),
+                     "set label 9 'TE err = %.6e' at screen 0.01,0.54 font 'Consolas,9' textcolor rgb '%s'\n",
+                     rel_err, err_color);
+            buf += line;
+        }
+    }
+
+    // Plot command + inline data (circles)
     buf += "plot '-' with circles lc rgb variable\n";
 
     char line[128];
@@ -206,57 +284,45 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
                 particles->particle_list[i]->rgb);
         buf.append(line, len);
     }
-
     buf += "e\n";
-
-    // Energy/momentum labels only in debug mode
-    if (debug_mode_) {
-        snprintf(line, sizeof(line), "set label 3 'KE  = %.4e' at screen 0.01,0.85 font 'Consolas,9' textcolor rgb 'white'\n",
-                static_cast<double>(metrics_t->KE));
-        buf += line;
-        snprintf(line, sizeof(line), "set label 4 'PE  = %.4e' at screen 0.01,0.80 font 'Consolas,9' textcolor rgb 'white'\n",
-                static_cast<double>(metrics_t->PE));
-        buf += line;
-        snprintf(line, sizeof(line), "set label 5 'HE  = %.4e' at screen 0.01,0.75 font 'Consolas,9' textcolor rgb 'white'\n",
-                static_cast<double>(metrics_t->HE));
-        buf += line;
-        snprintf(line, sizeof(line), "set label 6 'TE  = %.4e' at screen 0.01,0.70 font 'Consolas,9' textcolor rgb 'white'\n",
-                static_cast<double>(metrics_t->TE));
-        buf += line;
-        snprintf(line, sizeof(line), "set label 7 'Px  = %.4e' at screen 0.01,0.65 font 'Consolas,9' textcolor rgb 'white'\n",
-                static_cast<double>(metrics_t->mom_x));
-        buf += line;
-        snprintf(line, sizeof(line), "set label 8 'Py  = %.4e' at screen 0.01,0.60 font 'Consolas,9' textcolor rgb 'white'\n",
-                static_cast<double>(metrics_t->mom_y));
-        buf += line;
-
-        double rel_err = static_cast<double>(metrics_t->relative_error);
-        const char* err_color = (rel_err < 0.001) ? "#00FF00" : (rel_err < 0.01) ? "#FFFF00" : "#FF4444";
-        snprintf(line, sizeof(line), "set label 9 'TE err = %.6e' at screen 0.01,0.54 font 'Consolas,9' textcolor rgb '%s'\n",
-                rel_err, err_color);
-        buf += line;
-    }
 
     if (plot_debugmode) {
         t_build_end = EngineCore::clock_t::now();
     }
 
     // ---- GNUplot interaction: write + flush to the gnuplot pipe ----
-    fwrite(buf.data(), 1, buf.size(), gnuplotPipe);
-    fflush(gnuplotPipe);
+    if (gnuplotPipe) {
+        fwrite(buf.data(), 1, buf.size(), gnuplotPipe);
+        fflush(gnuplotPipe);
+    }
 
     if (plot_debugmode) {
         t_io_end = EngineCore::clock_t::now();
 
         const double total_s = EngineCore::seconds_between(t_total_start, t_io_end);
         const double io_s    = EngineCore::seconds_between(t_build_end,   t_io_end);
-
-        const double io_pct = (total_s > 0.0) ? (io_s / total_s) * 100.0 : 0.0;
+        const double io_pct  = (total_s > 0.0) ? (io_s / total_s) * 100.0 : 0.0;
 
         std::cout << "plot_GNU took " << total_s
                   << " seconds (" << io_pct << "% due to GNUplot interaction)"
                   << std::endl;
     }
+}
+
+void Plotter::playback_offline(const std::string& rendered_file) {
+    cout << "Launching playback: " << rendered_file << endl;
+
+#ifdef _WIN32
+    // Open with default associated app (GIF will animate)
+    std::string cmd = "start \"\" \"" + rendered_file + "\"";
+    system(cmd.c_str());
+#elif __APPLE__
+    std::string cmd = "open \"" + rendered_file + "\"";
+    system(cmd.c_str());
+#else
+    std::string cmd = "xdg-open \"" + rendered_file + "\"";
+    system(cmd.c_str());
+#endif
 }
 
 void Plotter::close_GNU() {
