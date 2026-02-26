@@ -40,7 +40,7 @@ static const int  kStepPauseInterval = 100;
 // =======================
 // CACHE CONFIG
 // =======================
-static const int  kCacheWriteEveryN     = 500;     // Save every Nth snapshot within a flush chunk
+static const int  kCacheWriteEveryN     = 50;     // Save every Nth snapshot within a flush chunk
 static const int  kCacheFlushEverySteps = 5000;   // flush every N simulation timesteps
 
 // =======================
@@ -817,10 +817,14 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
 
     const int n_particles = (int)particle_states->snaps[0]->particle_list.size();
     const int stride = std::max(1, kCacheWriteEveryN);
-    const int written_snaps = (total_snaps + stride - 1) / stride;
+
+    // Base stride writes + optional forced final snapshot (if not already on stride)
+    const bool need_force_last = (((total_snaps - 1) % stride) != 0);
+    const int written_snaps_base = (total_snaps + stride - 1) / stride;
+    const int written_snaps = written_snaps_base + (need_force_last ? 1 : 0);
+
     const double compression = total_snaps > 0 ? (1.0 - (double)written_snaps / total_snaps) * 100.0 : 0.0;
 
-    
 
     file << std::fixed << std::setprecision(15);
 
@@ -831,6 +835,21 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
     int last_reported_bucket = -5;
     int next_report_step = 0;
     int written = 0;
+
+    auto write_snapshot_index = [&](int idx) {
+        const long long step_id =
+            (idx >= 0 && idx < (int)gCacheSnapStepIds.size())
+                ? gCacheSnapStepIds[(size_t)idx]
+                : (long long)idx;
+
+        for (int j = 0; j < (int)particle_states->snaps[idx]->particle_list.size(); j++) {
+            const auto& sp = particle_states->snaps[idx]->particle_list[j];
+            if (!sp) continue;
+            CacheSchema::write_row(file, step_id, *sp);
+        }
+    };
+
+    int last_written_i = -1;
 
     for (int i = 0; i < total_snaps; i += stride) {
         if (written_snaps > 0 && written >= next_report_step) {
@@ -845,20 +864,30 @@ void Engine::run_to_cache(std::shared_ptr<scenario> scenario, std::shared_ptr<sn
         }
         ++written;
 
-        const long long step_id =
-            (i >= 0 && i < (int)gCacheSnapStepIds.size())
-                ? gCacheSnapStepIds[(size_t)i]
-                : (long long)i;
+        write_snapshot_index(i);
+        last_written_i = i;
+    }
 
-        for (int j = 0; j < (int)particle_states->snaps[i]->particle_list.size(); j++) {
-            const auto& sp = particle_states->snaps[i]->particle_list[j];
-            if (!sp) continue;
-            CacheSchema::write_row(file, step_id, *sp);
+    // ---- ensure final buffered snapshot is always cached ----
+    const int last_idx = total_snaps - 1;
+    if (last_idx >= 0 && last_written_i != last_idx) {
+        if (written_snaps > 0 && written >= next_report_step) {
+            int pct = (int)(((long long)(written + 1) * 100LL) / (long long)written_snaps);
+            int bucket = (pct / 20) * 20;
+            if (bucket > last_reported_bucket) {
+                last_reported_bucket = bucket;
+            }
+            int nb = last_reported_bucket + 5;
+            next_report_step = (nb > 100) ? written_snaps + 1
+                : (int)(((long long)written_snaps * (long long)nb + 99LL) / 100LL);
         }
+        ++written;
+
+        write_snapshot_index(last_idx);
+        last_written_i = last_idx;
     }
 
     file.close();
-    
 
     if (gCacheInitializedThisRun) {
         gCacheStepIdOffset += (long long)total_snaps;

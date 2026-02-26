@@ -162,7 +162,7 @@ static inline void resolve_collission_ptr(Particle* particle1, Particle* particl
 }
 
 // =======================
-// DIRECT ALL-PAIRS GRAVITY (KEPT, BUT NO LONGER USED BY step())
+// DIRECT ALL-PAIRS GRAVITY - DEPRECATED
 // =======================
 static void compute_gravity_forces(
     std::vector<Vector2D>& forces,
@@ -227,8 +227,7 @@ static void compute_gravity_forces(
 }
 
 // =======================
-// BARNES–HUT GRAVITY (NEW)
-// same inputs/outputs as compute_gravity_forces
+// BARNES–HUT TREE HELPERS
 // =======================
 static inline int bh_quadrant(const BHNode& node, high_prec x, high_prec y) {
     const bool east  = (x >= node.cx);
@@ -279,7 +278,7 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
     // keep max radius for collision pruning
     node.max_rad = std::max(node.max_rad, p->rad);
 
-    // If we are already "too small", bucket everything here (degeneracy guard)
+    // If too small, bucket everything
     if (node.half <= kBHMinHalf) {
         if (node.particle_index >= 0) {
             node.bucket.push_back(node.particle_index);
@@ -290,7 +289,7 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
         return;
     }
 
-    // If node has bucket, keep bucketing (should only happen after degeneracy trigger)
+    // If node has bucket, keep bucketing
     if (!node.bucket.empty()) {
         node.bucket.push_back(idx);
         bh_add_mass_com(node, p->m, p->x, p->y);
@@ -343,7 +342,7 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
 
     bh_insert(*node.child[q], idx, list);
 
-    // Incremental aggregate update for THIS newly inserted particle only
+    //
     bh_add_mass_com(node, p->m, p->x, p->y);
 }
 
@@ -492,7 +491,7 @@ static void compute_gravity_forcesBH(
 }
 
 // =======================
-// COLLISIONS VIA BH TREE (OPTION A)
+// COLLISIONS VIA BH TREE 
 // =======================
 static void bh_collide_query(
     const BHNode* node,
@@ -540,7 +539,7 @@ static void bh_collide_query(
 }
 
 // =======================
-// UNIFIED COLLISIONS (OPTIONAL COUNTING)
+// UNIFIED COLLISIONS
 // =======================
 static void resolve_collisions_unified(
     std::vector<std::shared_ptr<Particle>>& list,

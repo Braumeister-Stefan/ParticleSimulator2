@@ -1,3 +1,5 @@
+// ParticlePlotter.cpp
+
 #include <memory>
 #include <iostream>
 #include <fstream>
@@ -10,6 +12,9 @@
 #include <limits>
 #include <cstdlib>
 #include <string>
+#include <vector>
+#include <type_traits>
+#include <utility>
 
 #include "../include/PhysEngineCore.h"
 
@@ -22,8 +27,47 @@ using namespace std;
 
 FILE *gnuplotPipe = nullptr;
 
+// ------------------------------------
+// Small internal helpers (mass detect)
+// ------------------------------------
+namespace {
+
+template <typename T, typename = void>
+struct has_member_m : std::false_type {};
+template <typename T>
+struct has_member_m<T, std::void_t<decltype(std::declval<T>().m)>> : std::true_type {};
+
+template <typename T, typename = void>
+struct has_member_mass : std::false_type {};
+template <typename T>
+struct has_member_mass<T, std::void_t<decltype(std::declval<T>().mass)>> : std::true_type {};
+
+template <typename T, typename = void>
+struct has_member_M : std::false_type {};
+template <typename T>
+struct has_member_M<T, std::void_t<decltype(std::declval<T>().M)>> : std::true_type {};
+
+template <typename ParticleT>
+static inline double get_mass_d(const ParticleT& p) {
+    if constexpr (has_member_m<ParticleT>::value) {
+        return static_cast<double>(p.m);
+    } else if constexpr (has_member_mass<ParticleT>::value) {
+        return static_cast<double>(p.mass);
+    } else if constexpr (has_member_M<ParticleT>::value) {
+        return static_cast<double>(p.M);
+    } else {
+        return 1.0; // fallback: equal-mass average
+    }
+}
+
+static inline double abs_d(double v) { return (v < 0.0) ? -v : v; }
+
+} // namespace
+
 Plotter::Plotter() {
     cout << "Plotting Engine initialized." << endl;
+    // Small initial reserve; plot_GNU will grow this as needed
+    frame_buf_.reserve(1024);
 }
 
 Plotter::~Plotter() {
@@ -36,21 +80,43 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
     apply_heat_brightness_and_pack_rgb(particle_states, scenario);
 
+    // ---- Plot bounds: center-of-mass of FIRST frame ----
+    bounds_from_com0(particle_states, plot_padding_frac_, plot_xmin_, plot_xmax_, plot_ymin_, plot_ymax_);
+    plot_bounds_ready_ = true;
+
     // ---- OFFLINE render setup ----
     init_GNU(scenario);
+    if (!gnuplotPipe) {
+        cout << "ERROR: GNUplot pipe not available. Aborting render." << endl;
+        return;
+    }
+
+    // Static plot settings that don't change per-frame should be sent ONCE.
+    // (Saves pipe bytes + gnuplot parse work per frame.)
+    {
+        std::string once;
+        once.reserve(256);
+        append_ranges(once);
+        if (!once.empty()) {
+            fwrite(once.data(), 1, once.size(), gnuplotPipe);
+            fflush(gnuplotPipe);
+        }
+    }
 
     // Set N label once (particle count never changes).
-    // IMPORTANT: For animated GIF, anything you want visible in the FIRST frame must be sent BEFORE the first plot.
     fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n",
             static_cast<int>(particle_states->snaps[0]->particle_list.size()));
-
-    // Initial step label (frame 0)
-    current_step_label_ = 0;
+    fflush(gnuplotPipe);
 
     cout << "............................................" << endl;
     cout << "Offline rendering scenario: " << scenario->name << endl;
     cout << "Output: " << offline_output_path_ << endl;
     cout << "............................................" << endl;
+
+    cout << "Plot bounds (COM0+square): "
+         << "x[" << plot_xmin_ << ", " << plot_xmax_ << "] "
+         << "y[" << plot_ymin_ << ", " << plot_ymax_ << "]"
+         << endl;
 
     int step = static_cast<int>(1.0 / static_cast<double>(scenario->dt)) * scenario->plot_speed_multiplier;
     if (step < 1) step = 1;
@@ -62,20 +128,19 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     const int n = static_cast<int>(particle_states->snaps.size());
     const int totalIters = (n + step - 1) / step;
 
-    // Render the initial frame explicitly (keeps behavior close to your current flow)
-    plot_GNU(particle_states->snaps[0], particle_states->metrics[0]);
+    // Progress logging setup (compute once)
+    const int progressStep = totalIters / 100; // same behavior: if 0, no progress printing
 
-    // Render remaining frames (including the original behavior that starts loop at i=0)
+    // Render frames (single pass; avoids rendering frame 0 twice)
     for (int i = 0; i < n; i += step) {
-        int iter = i / step; // 0..totalIters-1
+        const int iter = i / step; // 0..totalIters-1
 
-        int progressStep = totalIters / 10;
         if (progressStep > 0 && (iter % progressStep == 0)) {
             cout << "Rendering " << (iter * 100) / totalIters << "% complete." << endl;
         }
 
-        // Match your prior label update logic: "Step: i+1" in the loop
-        current_step_label_ = i + 1;
+        // Step label matches the snapshot index
+        current_step_label_ = i;
 
         plot_GNU(particle_states->snaps[i], particle_states->metrics[i]);
     }
@@ -95,37 +160,50 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
 void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, shared_ptr<scenario> scenario) {
 
-    // Config: cutoff, gamma
-    const high_prec HEAT_CUTOFF_FRAC   = scenario->heat_cutoff_frac;
-    const high_prec HEAT_GAMMA_HP      = scenario->heat_gamma;
+    // Config: cutoff, gamma (cast once to double)
+    const double HEAT_CUTOFF_FRAC = static_cast<double>(scenario->heat_cutoff_frac);
+    const double HEAT_GAMMA       = static_cast<double>(scenario->heat_gamma);
 
-    high_prec max_temp = 0.0;
-    high_prec min_temp = std::numeric_limits<high_prec>::max();
-    for (int i = 0; i < static_cast<int>(snaps->snaps.size()); i++) {
-        for (int j = 0; j < static_cast<int>(snaps->snaps[i]->particle_list.size()); j++) {
-            high_prec t = snaps->snaps[i]->particle_list[j]->temp;
+    auto& frames = snaps->snaps;
+    const int nf = static_cast<int>(frames.size());
+
+    double max_temp = 0.0;
+    double min_temp = std::numeric_limits<double>::max();
+
+    for (int i = 0; i < nf; ++i) {
+        auto& plist = frames[i]->particle_list;
+        const int np = static_cast<int>(plist.size());
+        for (int j = 0; j < np; ++j) {
+            const auto& p = plist[j];
+            const double t = static_cast<double>(p->temp);
             if (t > max_temp) max_temp = t;
             if (t < min_temp) min_temp = t;
         }
     }
-    if (snaps->snaps.empty() || snaps->snaps[0]->particle_list.empty()) min_temp = 0.0;
-    high_prec temp_range = max_temp - min_temp;
 
-    // Helper: pack base r,g,b into rgb int for all particles (no heat tinting)
+    if (frames.empty() || frames[0]->particle_list.empty()) min_temp = 0.0;
+    const double temp_range = max_temp - min_temp;
+
+    // Fast path: pack base rgb only (no heat tinting)
     auto pack_base_rgb = [&]() {
-        for (int i = 0; i < static_cast<int>(snaps->snaps.size()); i++) {
-            for (int j = 0; j < static_cast<int>(snaps->snaps[i]->particle_list.size()); j++) {
-                auto &p = snaps->snaps[i]->particle_list[j];
-                int r255 = static_cast<int>(p->r * 255);
-                int g255 = static_cast<int>(p->g * 255);
-                int b255 = static_cast<int>(p->b * 255);
+        for (int i = 0; i < nf; ++i) {
+            auto& plist = frames[i]->particle_list;
+            const int np = static_cast<int>(plist.size());
+            for (int j = 0; j < np; ++j) {
+                auto& p = plist[j];
+                const double r = static_cast<double>(p->r);
+                const double g = static_cast<double>(p->g);
+                const double b = static_cast<double>(p->b);
+
+                const int r255 = static_cast<int>(r * 255.0);
+                const int g255 = static_cast<int>(g * 255.0);
+                const int b255 = static_cast<int>(b * 255.0);
                 p->rgb = (r255 << 16) | (g255 << 8) | (b255);
             }
         }
     };
 
-    // If max temperature is very low, skip heating effect
-    if (max_temp < 0.00001) {
+    if (max_temp < 1e-5) {
         cout << "RGB values calculated (max temp < 0.00001, no heating applied)." << endl;
         pack_base_rgb();
         return;
@@ -138,40 +216,55 @@ void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, sh
 
     cout << "RGB values calculated (temp range: " << min_temp << " .. " << max_temp << ")." << endl;
 
-    high_prec cutoff_temp = min_temp + HEAT_CUTOFF_FRAC * temp_range;
-    high_prec denom = (max_temp - cutoff_temp);
+    const double cutoff_temp = min_temp + HEAT_CUTOFF_FRAC * temp_range;
+    const double denom = (max_temp - cutoff_temp);
     if (denom <= 0.0) {
         pack_base_rgb();
         return;
     }
 
-    for (int i = 0; i < static_cast<int>(snaps->snaps.size()); i++) {
-        for (int j = 0; j < static_cast<int>(snaps->snaps[i]->particle_list.size()); j++) {
+    const bool gamma_is_1 = (std::abs(HEAT_GAMMA - 1.0) < 1e-12);
 
-            auto &p = snaps->snaps[i]->particle_list[j];
+    for (int i = 0; i < nf; ++i) {
+        auto& plist = frames[i]->particle_list;
+        const int np = static_cast<int>(plist.size());
+        for (int j = 0; j < np; ++j) {
+            auto& p = plist[j];
 
-            high_prec fraction = 0.0;
-            if (p->temp > cutoff_temp) {
-                fraction = (p->temp - cutoff_temp) / denom;
+            const double t = static_cast<double>(p->temp);
+
+            double fraction = 0.0;
+            if (t > cutoff_temp) {
+                fraction = (t - cutoff_temp) / denom;
                 if (fraction < 0.0) fraction = 0.0;
                 if (fraction > 1.0) fraction = 1.0;
 
-                fraction = std::pow(fraction, HEAT_GAMMA_HP);
+                if (!gamma_is_1) {
+                    fraction = std::pow(fraction, HEAT_GAMMA);
+                }
             }
 
-            // Hue shift toward red + 1/4 as brightening
-            high_prec brighten = fraction * 0.25;
-            p->r = p->r + (1.0 - p->r) * fraction + (1.0 - p->r) * brighten;
-            p->g = p->g * (1.0 - fraction) + (1.0 - p->g) * brighten;
-            p->b = p->b * (1.0 - fraction) + (1.0 - p->b) * brighten;
+            double r = static_cast<double>(p->r);
+            double g = static_cast<double>(p->g);
+            double b = static_cast<double>(p->b);
 
-            if (p->r > 1.0) p->r = 1.0;
-            if (p->g > 1.0) p->g = 1.0;
-            if (p->b > 1.0) p->b = 1.0;
+            const double brighten = fraction * 0.25;
 
-            int r255 = static_cast<int>(p->r * 255);
-            int g255 = static_cast<int>(p->g * 255);
-            int b255 = static_cast<int>(p->b * 255);
+            r = r + (1.0 - r) * fraction + (1.0 - r) * brighten;
+            g = g * (1.0 - fraction) + (1.0 - g) * brighten;
+            b = b * (1.0 - fraction) + (1.0 - b) * brighten;
+
+            if (r > 1.0) r = 1.0;
+            if (g > 1.0) g = 1.0;
+            if (b > 1.0) b = 1.0;
+
+            p->r = r;
+            p->g = g;
+            p->b = b;
+
+            const int r255 = static_cast<int>(r * 255.0);
+            const int g255 = static_cast<int>(g * 255.0);
+            const int b255 = static_cast<int>(b * 255.0);
             p->rgb = (r255 << 16) | (g255 << 8) | (b255);
         }
     }
@@ -180,10 +273,8 @@ void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, sh
 void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     cout << "Initializing GNU (offline GIF renderer)" << endl;
 
-    // Output path: keep alongside your existing rendered_scenarios assets
     offline_output_path_ = "Inputs/rendered_scenarios/" + scenario->name + ".gif";
 
-    // No need for -persistent when writing to file, but leaving it would also work.
     gnuplotPipe = popen("gnuplot", "w");
     if (!gnuplotPipe) {
         cout << "ERROR: Failed to start gnuplot process." << endl;
@@ -193,18 +284,12 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     string scenario_name = scenario->name;
     replace(scenario_name.begin(), scenario_name.end(), '_', ' ');
 
-    // Animated GIF: each "plot" command becomes one frame
-    // delay is in 1/100 sec units (delay 4 => 0.04s => 25 fps nominal)
-    fprintf(gnuplotPipe, "set terminal gif animate optimize delay 4 loop 0 size 1000,1000\n");
+    fprintf(gnuplotPipe, "set terminal gif animate delay 4 loop 0 size 3200,3200\n");
     fprintf(gnuplotPipe, "set output '%s'\n", offline_output_path_.c_str());
 
-    // Background (terminal-independent): rectangle behind everything
     fprintf(gnuplotPipe, "set object 1 rectangle from screen 0,0 to screen 1,1 behind fillcolor rgb '#000000' fillstyle solid 1.0\n");
 
-    // Keep your plotting setup
     fprintf(gnuplotPipe, "set title '%s' textcolor rgb 'white'\n", scenario_name.c_str());
-    fprintf(gnuplotPipe, "set xrange [-1000:1000]\n");
-    fprintf(gnuplotPipe, "set yrange [-1000:1000]\n");
     fprintf(gnuplotPipe, "set size ratio -1\n");
     fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
     fprintf(gnuplotPipe, "unset key\n");
@@ -219,80 +304,88 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
         t_total_start = EngineCore::clock_t::now();
     }
 
-    // Batch all gnuplot commands into a single string to minimize pipe write syscalls
-    std::string buf;
-    buf.reserve(particles->particle_list.size() * 48 + 1024);
+    const auto& plist = particles->particle_list;
+    const int np = static_cast<int>(plist.size());
 
-    // IMPORTANT for offline animation:
+    // Reuse one buffer to reduce alloc churn.
+    // Rough estimate: ~50-70 bytes per particle line + labels.
+    const size_t need = static_cast<size_t>(np) * 64u + 1024u;
+    if (frame_buf_.capacity() < need) frame_buf_.reserve(need);
+    frame_buf_.clear();
+
     // Labels must be set BEFORE the plot command so they appear in the same frame.
     {
         char line[256];
+
         snprintf(line, sizeof(line),
                  "set label 1 'Step: %d' at screen 0.01,0.95 textcolor rgb 'white'\n",
                  current_step_label_);
-        buf += line;
+        frame_buf_ += line;
 
-        if (debug_mode_) {
+        if (debug_mode_ && metrics_t) {
             snprintf(line, sizeof(line),
                      "set label 3 'KE  = %.4e' at screen 0.01,0.85 font 'Consolas,9' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->KE));
-            buf += line;
+            frame_buf_ += line;
 
             snprintf(line, sizeof(line),
                      "set label 4 'PE  = %.4e' at screen 0.01,0.80 font 'Consolas,9' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->PE));
-            buf += line;
+            frame_buf_ += line;
 
             snprintf(line, sizeof(line),
                      "set label 5 'HE  = %.4e' at screen 0.01,0.75 font 'Consolas,9' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->HE));
-            buf += line;
+            frame_buf_ += line;
 
             snprintf(line, sizeof(line),
                      "set label 6 'TE  = %.4e' at screen 0.01,0.70 font 'Consolas,9' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->TE));
-            buf += line;
+            frame_buf_ += line;
 
             snprintf(line, sizeof(line),
                      "set label 7 'Px  = %.4e' at screen 0.01,0.65 font 'Consolas,9' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->mom_x));
-            buf += line;
+            frame_buf_ += line;
 
             snprintf(line, sizeof(line),
                      "set label 8 'Py  = %.4e' at screen 0.01,0.60 font 'Consolas,9' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->mom_y));
-            buf += line;
+            frame_buf_ += line;
 
-            double rel_err = static_cast<double>(metrics_t->relative_error);
+            const double rel_err = static_cast<double>(metrics_t->relative_error);
             const char* err_color = (rel_err < 0.001) ? "#00FF00" : (rel_err < 0.01) ? "#FFFF00" : "#FF4444";
             snprintf(line, sizeof(line),
                      "set label 9 'TE err = %.6e' at screen 0.01,0.54 font 'Consolas,9' textcolor rgb '%s'\n",
                      rel_err, err_color);
-            buf += line;
+            frame_buf_ += line;
         }
     }
 
     // Plot command + inline data (circles)
-    buf += "plot '-' with circles lc rgb variable\n";
+    frame_buf_ += "plot '-' with circles lc rgb variable\n";
 
-    char line[128];
-    for (int i = 0; i < static_cast<int>(particles->particle_list.size()); i++) {
-        int len = snprintf(line, sizeof(line), "%f %f %f %d\n",
-                static_cast<float>(particles->particle_list[i]->x),
-                static_cast<float>(particles->particle_list[i]->y),
-                static_cast<float>(particles->particle_list[i]->rad),
-                particles->particle_list[i]->rgb);
-        buf.append(line, len);
+    // Build particle lines
+    char line[192];
+    for (int i = 0; i < np; ++i) {
+        const auto& p = plist[i];
+
+        const double x   = static_cast<double>(p->x);
+        const double y   = static_cast<double>(p->y);
+        const double rad = static_cast<double>(p->rad);
+
+        const int len = snprintf(line, sizeof(line), "%.10g %.10g %.10g %d\n",
+                                 x, y, rad, p->rgb);
+        frame_buf_.append(line, static_cast<size_t>(len));
     }
-    buf += "e\n";
+    frame_buf_ += "e\n";
 
     if (plot_debugmode) {
         t_build_end = EngineCore::clock_t::now();
     }
 
-    // ---- GNUplot interaction: write + flush to the gnuplot pipe ----
     if (gnuplotPipe) {
-        fwrite(buf.data(), 1, buf.size(), gnuplotPipe);
+        fwrite(frame_buf_.data(), 1, frame_buf_.size(), gnuplotPipe);
         fflush(gnuplotPipe);
     }
 
@@ -310,10 +403,10 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
 }
 
 void Plotter::playback_offline(const std::string& rendered_file) {
-    cout << "Launching playback: " << rendered_file << endl;
+    cout << "Press enter to start GIF " << rendered_file << endl;
+    cin.get();
 
 #ifdef _WIN32
-    // Open with default associated app (GIF will animate)
     std::string cmd = "start \"\" \"" + rendered_file + "\"";
     system(cmd.c_str());
 #elif __APPLE__
@@ -332,51 +425,63 @@ void Plotter::close_GNU() {
     }
 }
 
-int Plotter::intensity_to_rgb(high_prec r, high_prec g, high_prec b) {
-    int r255 = static_cast<int>(r * 255);
-    int g255 = static_cast<int>(g * 255);
-    int b255 = static_cast<int>(b * 255);
+int Plotter::intensity_to_rgb(double r, double g, double b) {
+    const int r255 = static_cast<int>(r * 255.0);
+    const int g255 = static_cast<int>(g * 255.0);
+    const int b255 = static_cast<int>(b * 255.0);
     return (r255 << 16) | (g255 << 8) | (b255);
 }
 
 shared_ptr<Particles> Plotter::convert_intensity_to_rgb(shared_ptr<Particles> particles) {
-    for (int i = 0; i < static_cast<int>(particles->particle_list.size()); i++) {
-        int rgb = intensity_to_rgb(particles->particle_list[i]->r,
-                                  particles->particle_list[i]->g,
-                                  particles->particle_list[i]->b);
-        particles->particle_list[i]->rgb = rgb;
+    auto& plist = particles->particle_list;
+    const int np = static_cast<int>(plist.size());
+    for (int i = 0; i < np; ++i) {
+        auto &p = plist[i];
+        const double r = static_cast<double>(p->r);
+        const double g = static_cast<double>(p->g);
+        const double b = static_cast<double>(p->b);
+        p->rgb = intensity_to_rgb(r, g, b);
     }
     return particles;
 }
 
 shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots) {
 
-    high_prec max_temp = 0.0;
-    for (int i = 0; i < snapshots->snaps.size(); i++) {
-        for (int j = 0; j < snapshots->snaps[i]->particle_list.size(); j++) {
-            high_prec t = snapshots->snaps[i]->particle_list[j]->temp;
+    double max_temp = 0.0;
+    auto& frames = snapshots->snaps;
+    const int nf = static_cast<int>(frames.size());
+
+    for (int i = 0; i < nf; ++i) {
+        auto& plist = frames[i]->particle_list;
+        const int np = static_cast<int>(plist.size());
+        for (int j = 0; j < np; ++j) {
+            const auto& p = plist[j];
+            const double t = static_cast<double>(p->temp);
             if (t > max_temp) max_temp = t;
         }
     }
 
-    high_prec min_temp = 0.0;
-    high_prec temp_range = max_temp - min_temp;
+    const double min_temp = 0.0;
+    const double temp_range = max_temp - min_temp;
 
     if (temp_range <= 0.0) {
         return snapshots;
     }
 
-    for (int i = 0; i < snapshots->snaps.size(); i++) {
-        for (int j = 0; j < snapshots->snaps[i]->particle_list.size(); j++) {
+    for (int i = 0; i < nf; ++i) {
+        auto& plist = frames[i]->particle_list;
+        const int np = static_cast<int>(plist.size());
+        for (int j = 0; j < np; ++j) {
+            auto &p = plist[j];
 
-            high_prec t = snapshots->snaps[i]->particle_list[j]->temp;
-            high_prec fraction = (t - min_temp) / temp_range;
+            const double t = static_cast<double>(p->temp);
+            double fraction = (t - min_temp) / temp_range;
             if (fraction < 0.0) fraction = 0.0;
             if (fraction > 1.0) fraction = 1.0;
 
-            high_prec r = snapshots->snaps[i]->particle_list[j]->r;
-            high_prec g = snapshots->snaps[i]->particle_list[j]->g;
-            high_prec b = snapshots->snaps[i]->particle_list[j]->b;
+            double r = static_cast<double>(p->r);
+            double g = static_cast<double>(p->g);
+            double b = static_cast<double>(p->b);
 
             r = r + (1.0 - r) * fraction;
             g = g + (1.0 - g) * fraction;
@@ -386,11 +491,136 @@ shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots) {
             if (g > 1.0) g = 1.0;
             if (b > 1.0) b = 1.0;
 
-            snapshots->snaps[i]->particle_list[j]->r = r;
-            snapshots->snaps[i]->particle_list[j]->g = g;
-            snapshots->snaps[i]->particle_list[j]->b = b;
+            p->r = r;
+            p->g = g;
+            p->b = b;
         }
     }
 
     return snapshots;
+}
+
+// ---------------------------------------------------------
+// Plot bounds helpers (COM-based, doubles only)
+// ---------------------------------------------------------
+
+void Plotter::bounds_from_com0(shared_ptr<snapshots> snaps,
+                               double pad_frac,
+                               double& xmin,
+                               double& xmax,
+                               double& ymin,
+                               double& ymax) const {
+    xmin = -1.0; xmax = 1.0;
+    ymin = -1.0; ymax = 1.0;
+
+    if (!snaps || snaps->snaps.empty() || !snaps->snaps[0]) return;
+
+    const auto& frame0 = snaps->snaps[0];
+    if (frame0->particle_list.empty()) return;
+
+    const auto& plist = frame0->particle_list;
+    const int np = static_cast<int>(plist.size());
+
+    double sum_m  = 0.0;
+    double sum_mx = 0.0;
+    double sum_my = 0.0;
+
+    for (int i = 0; i < np; ++i) {
+        const auto& p = plist[i];
+        if (!p) continue;
+
+        const double m = get_mass_d(*p);
+        const double x = static_cast<double>(p->x);
+        const double y = static_cast<double>(p->y);
+
+        if (!std::isfinite(m) || !std::isfinite(x) || !std::isfinite(y)) continue;
+
+        sum_m  += m;
+        sum_mx += m * x;
+        sum_my += m * y;
+    }
+
+    double cx = 0.0;
+    double cy = 0.0;
+
+    if (sum_m != 0.0) {
+        cx = sum_mx / sum_m;
+        cy = sum_my / sum_m;
+    } else {
+        double sx = 0.0, sy = 0.0, cnt = 0.0;
+        for (int i = 0; i < np; ++i) {
+            const auto& p = plist[i];
+            if (!p) continue;
+            const double x = static_cast<double>(p->x);
+            const double y = static_cast<double>(p->y);
+            if (!std::isfinite(x) || !std::isfinite(y)) continue;
+            sx += x;
+            sy += y;
+            cnt += 1.0;
+        }
+        if (cnt != 0.0) {
+            cx = sx / cnt;
+            cy = sy / cnt;
+        }
+    }
+
+    // --------------
+    // Radial percentile (98%) of square-radius-from-center
+    // d_i = max(|x-cx|+rad, |y-cy|+rad)
+    // --------------
+    std::vector<double> dists;
+    dists.reserve(static_cast<size_t>(np));
+
+    for (int i = 0; i < np; ++i) {
+        const auto& p = plist[i];
+        if (!p) continue;
+
+        const double x = static_cast<double>(p->x);
+        const double y = static_cast<double>(p->y);
+        const double r = static_cast<double>((p->rad > 0) ? p->rad : 0);
+
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(r)) continue;
+
+        const double dx = abs_d(x - cx) + r;
+        const double dy = abs_d(y - cy) + r;
+        const double d  = (dx > dy) ? dx : dy;
+
+        if (!std::isfinite(d)) continue;
+        dists.push_back(d);
+    }
+
+    double half = 0.0;
+    if (!dists.empty()) {
+        const double q = 0.98; // requested 98% radial percentile
+        const size_t n = dists.size();
+
+        // Use a conservative index so that at least ~98% are within bounds.
+        size_t k = static_cast<size_t>(std::ceil(q * static_cast<double>(n - 1)));
+        if (k >= n) k = n - 1;
+
+        std::nth_element(dists.begin(), dists.begin() + static_cast<std::ptrdiff_t>(k), dists.end());
+        half = dists[k];
+    }
+
+    if (half <= 0.0) half = 1.0;
+
+    if (pad_frac < 0.0) pad_frac = 0.0;
+    half *= (1.0 + pad_frac);
+
+    xmin = cx - half;
+    xmax = cx + half;
+    ymin = cy - half;
+    ymax = cy + half;
+}
+
+void Plotter::append_ranges(std::string& buf) const {
+    if (!plot_bounds_ready_) return;
+
+    char line[256];
+
+    snprintf(line, sizeof(line), "set xrange [%.17g:%.17g]\n", plot_xmin_, plot_xmax_);
+    buf += line;
+
+    snprintf(line, sizeof(line), "set yrange [%.17g:%.17g]\n", plot_ymin_, plot_ymax_);
+    buf += line;
 }
