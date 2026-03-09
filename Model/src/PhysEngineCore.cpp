@@ -246,16 +246,21 @@ static void compute_gravity_forces(
 // =======================
 // BARNES–HUT TREE HELPERS
 // =======================
-// Octant index: bit0=east(x>=cx), bit1=north(y>=cy), bit2=up(z>=cz)
+// Octant bit-mask constants: bit0=east(x>=cx), bit1=north(y>=cy), bit2=up(z>=cz)
+static const int kOctantEast  = 1; // bit 0: x >= node.cx
+static const int kOctantNorth = 2; // bit 1: y >= node.cy
+static const int kOctantUp    = 4; // bit 2: z >= node.cz
+
+// Octant index: combined bit-mask of East, North, Up flags
 static inline int bh_octant(const BHNode& node, high_prec x, high_prec y, high_prec z) {
-    return (x >= node.cx ? 1 : 0) | (y >= node.cy ? 2 : 0) | (z >= node.cz ? 4 : 0);
+    return (x >= node.cx ? kOctantEast : 0) | (y >= node.cy ? kOctantNorth : 0) | (z >= node.cz ? kOctantUp : 0);
 }
 
 static inline void bh_child_center(const BHNode& node, int q, high_prec& out_cx, high_prec& out_cy, high_prec& out_cz) {
     const high_prec h2 = node.half * 0.5;
-    out_cx = node.cx + (q & 1 ? h2 : -h2);
-    out_cy = node.cy + (q & 2 ? h2 : -h2);
-    out_cz = node.cz + (q & 4 ? h2 : -h2);
+    out_cx = node.cx + (q & kOctantEast  ? h2 : -h2);
+    out_cy = node.cy + (q & kOctantNorth ? h2 : -h2);
+    out_cz = node.cz + (q & kOctantUp    ? h2 : -h2);
 }
 
 static inline void bh_add_mass_com(BHNode& node, high_prec m, high_prec x, high_prec y, high_prec z) {

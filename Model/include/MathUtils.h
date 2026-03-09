@@ -15,6 +15,9 @@ struct Vector2D {
     high_prec z = 0.0;
 };
 
+// Alias for clarity: Vector2D now stores 3D coordinates (z added for 3D support)
+using Vector3D = Vector2D;
+
 
 
 // Define the multiplication operator for high_prec and Vector2D
