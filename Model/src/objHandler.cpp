@@ -88,7 +88,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
         new_object->x = safe_stod(col5);  
         //cout << "x: " << new_object->x << endl; 
         new_object->y = safe_stod(col6);   
-        new_object->z = 0;  
+        new_object->z = safe_stod(col7);
         new_object->vx = safe_stod(col8);  
         new_object->vy = safe_stod(col9);  
 
@@ -321,7 +321,7 @@ unique_ptr<Particle> ObjHandler::flatten_simple_obj(int particles_loaded, shared
             particle->b = simple_object->b;
             particle->x = simple_object->x;
             particle->y = simple_object->y;
-            particle->z = 0;
+            particle->z = simple_object->z;
             particle->vx = simple_object->vx;
             particle->vy = simple_object->vy;
             particle->vz = simple_object->vz;
@@ -388,7 +388,7 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
 
     high_prec circle_rad = complex_object->complexity_size;
     int complexity_n = static_cast<int>(complex_object->complexity_n);
-    Vector2D center = { complex_object->x, complex_object->y };
+    Vector2D center = { complex_object->x, complex_object->y, complex_object->z };
 
     // assume omega exists on complex_object
     high_prec omega = complex_object->omega;
@@ -416,7 +416,7 @@ shared_ptr<Particles> ObjHandler::flatten_complex_circle(shared_ptr<object> comp
         particle->b    = complex_object->b;
         particle->x    = sample_point.x;
         particle->y    = sample_point.y;
-        particle->z    = 0;
+        particle->z    = complex_object->z;
         particle->vx   = complex_object->vx;
         particle->vy   = complex_object->vy;
         particle->vz   = complex_object->vz;
@@ -529,7 +529,7 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
             new_particle->b = safe_stod(col4);   
             new_particle->x = safe_stod(col5);  
             new_particle->y = safe_stod(col6);   
-            new_particle->z = 0;   
+            new_particle->z = safe_stod(col7);
             new_particle->vx = safe_stod(col8);  
             new_particle->vy = safe_stod(col9);  
             new_particle->vz = safe_stod(col10);
@@ -723,7 +723,8 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
                 const Particle* pj = list[j].get();
                 high_prec dx = pj->x - pi->x;
                 high_prec dy = pj->y - pi->y;
-                high_prec dist2 = dx * dx + dy * dy;
+                high_prec dz = pj->z - pi->z;
+                high_prec dist2 = dx * dx + dy * dy + dz * dz;
                 high_prec target = pi->rad + pj->rad + margin;
                 if (dist2 < target * target) {
                     high_prec dist = sqrt(dist2);
@@ -749,7 +750,7 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
     if (initial_overlaps == 0) return 0;
 
     // --- Jacobi buffers ---
-    struct Disp { high_prec dx = 0, dy = 0; };
+    struct Disp { high_prec dx = 0, dy = 0, dz = 0; };
     std::vector<Disp> accum(n);
 
     // Under-relaxation factor
@@ -777,7 +778,7 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
         high_prec cumulative_this_pass = 0.0;
 
         // Reset accumulation buffers
-        for (int k = 0; k < n; ++k) { accum[k].dx = 0; accum[k].dy = 0; }
+        for (int k = 0; k < n; ++k) { accum[k].dx = 0; accum[k].dy = 0; accum[k].dz = 0; }
 
         // --- Accumulate corrections (read current positions, don't write yet) ---
         for (int i = 0; i < n; ++i) {
@@ -787,7 +788,8 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
 
                 high_prec dx = pj->x - pi->x;
                 high_prec dy = pj->y - pi->y;
-                high_prec dist2 = dx * dx + dy * dy;
+                high_prec dz = pj->z - pi->z;
+                high_prec dist2 = dx * dx + dy * dy + dz * dz;
                 high_prec sum_radii = pi->rad + pj->rad;
                 high_prec target = sum_radii + separation_margin;
 
@@ -797,6 +799,7 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
                 if (dist < 1e-30) {
                     dx = 1.0;
                     dy = 0.0;
+                    dz = 0.0;
                     dist = 1e-30;
                 }
 
@@ -806,6 +809,7 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
 
                 high_prec nx = dx / dist;
                 high_prec ny = dy / dist;
+                high_prec nz = dz / dist;
 
                 // Mass-weighted split (heavier particle moves less)
                 high_prec total_mass = pi->m + pj->m;
@@ -814,8 +818,10 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
 
                 accum[i].dx -= wi * overlap * nx;
                 accum[i].dy -= wi * overlap * ny;
+                accum[i].dz -= wi * overlap * nz;
                 accum[j].dx += wj * overlap * nx;
                 accum[j].dy += wj * overlap * ny;
+                accum[j].dz += wj * overlap * nz;
 
                 ++corrections_this_pass;
             }
@@ -827,6 +833,7 @@ int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iteratio
         for (int k = 0; k < n; ++k) {
             list[k]->x += relaxation_factor * accum[k].dx;
             list[k]->y += relaxation_factor * accum[k].dy;
+            list[k]->z += relaxation_factor * accum[k].dz;
         }
 
         total_corrections += corrections_this_pass;
@@ -1012,37 +1019,41 @@ int ObjHandler::safe_stoi(string str) {
 void ObjHandler::overwrite_rendered_obj(shared_ptr<Particles> complex_particles, shared_ptr<object> object) {
     // This function will overwrite the positions, velocities and rotation of the cached object with the parameters of the complex object
 
-    Vector2D new_center = { object->x, object->y };
+    Vector2D new_center = { object->x, object->y, object->z };
     high_prec boost_omega = object->omega;
 
     // 1. Calculate the current center of mass of the complex_particles
 
-    Vector2D current_center = {0, 0};
+    Vector2D current_center = {0, 0, 0};
     for (const auto& particle : complex_particles->particle_list) {
         current_center.x += particle->x;
         current_center.y += particle->y;
+        current_center.z += particle->z;
     }
     current_center.x /= complex_particles->particle_list.size();
     current_center.y /= complex_particles->particle_list.size();
+    current_center.z /= complex_particles->particle_list.size();
 
     // if x,y,vx,vy, omega are empty, set value to zero
 
     // 2. Calculate the translation vector from the current center to the new center
 
-    Vector2D translation = { new_center.x - current_center.x, new_center.y - current_center.y };
+    Vector2D translation = { new_center.x - current_center.x, new_center.y - current_center.y, new_center.z - current_center.z };
 
     // 3. Apply the translation and rotation to each particle in complex_particles
     for (const auto& particle : complex_particles->particle_list) {
         // Translate
         particle->x += translation.x;
         particle->y += translation.y;
+        particle->z += translation.z;
 
         //update velocity 
         particle->vx += object->vx;
         particle->vy += object->vy;
+        particle->vz += object->vz;
 
 
-        // Rotate
+        // Rotate (in XY plane about z-axis)
         add_rotation(*particle, new_center, boost_omega);
     }
  

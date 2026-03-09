@@ -50,7 +50,10 @@ Vector2D sample_in_circle(Vector2D center, high_prec radius) {
 
 // Function to calculate the distance between two points
 high_prec calc_distance(Vector2D point1, Vector2D point2) {
-    return hypot(point1.x - point2.x, point1.y - point2.y);
+    high_prec dx = point1.x - point2.x;
+    high_prec dy = point1.y - point2.y;
+    high_prec dz = point1.z - point2.z;
+    return sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 // Function to calculate the midpoint between two points
@@ -58,12 +61,13 @@ Vector2D calc_midpoint(Vector2D point1, Vector2D point2) {
     Vector2D midpoint;
     midpoint.x = (point1.x + point2.x) / 2.0;
     midpoint.y = (point1.y + point2.y) / 2.0;
+    midpoint.z = (point1.z + point2.z) / 2.0;
     return midpoint;
 }
 
 // Function to calculate the magnitude of a vector
 high_prec calc_magnitude(Vector2D vector) {
-    return hypot(vector.x, vector.y);
+    return sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
 }
 
 // Function to find the intersection of two lines

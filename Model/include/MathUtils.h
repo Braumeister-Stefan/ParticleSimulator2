@@ -12,43 +12,43 @@
 struct Vector2D {
     high_prec x;
     high_prec y;
-
+    high_prec z = 0.0;
 };
 
 
 
 // Define the multiplication operator for high_prec and Vector2D
 inline Vector2D operator*(const high_prec& scalar, const Vector2D& vec) {
-    return { vec.x * scalar, vec.y * scalar };
+    return { vec.x * scalar, vec.y * scalar, vec.z * scalar };
 }
 
 //define the Vector & Scalar operators
 
 inline Vector2D operator+(const high_prec& scalar, const Vector2D& vec) {
-    return { vec.x + scalar, vec.y + scalar };}
+    return { vec.x + scalar, vec.y + scalar, vec.z + scalar };}
 inline Vector2D operator-(const high_prec& scalar, const Vector2D& vec) {
-    return { vec.x - scalar, vec.y - scalar };}
+    return { vec.x - scalar, vec.y - scalar, vec.z - scalar };}
 inline Vector2D operator/(const Vector2D& vec, const high_prec& scalar) {
-    return { vec.x / scalar, vec.y / scalar };}
+    return { vec.x / scalar, vec.y / scalar, vec.z / scalar };}
 //define the Vector & Vector operators
 inline Vector2D operator+(const Vector2D& vec1, const Vector2D& vec2) {
-    return { vec1.x + vec2.x, vec1.y + vec2.y };}
+    return { vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z };}
 
 inline Vector2D operator-(const Vector2D& vec1, const Vector2D& vec2) {
-    return { vec1.x - vec2.x, vec1.y - vec2.y };}
+    return { vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z };}
 
 inline Vector2D operator*(const Vector2D& vec1, const Vector2D& vec2) {
-    return { vec1.x * vec2.x, vec1.y * vec2.y };}
+    return { vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z };}
 
 inline Vector2D operator/(const Vector2D& vec1, const Vector2D& vec2) {
-    return { vec1.x / vec2.x, vec1.y / vec2.y };}
+    return { vec1.x / vec2.x, vec1.y / vec2.y, vec1.z / vec2.z };}
 
 
 
 
 // Dot product function
 inline high_prec dot(const Vector2D& v1, const Vector2D& v2) {
-    return v1.x * v2.x + v1.y * v2.y;
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
 

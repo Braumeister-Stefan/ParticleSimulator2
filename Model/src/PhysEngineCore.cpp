@@ -77,8 +77,9 @@ static inline high_prec safe_rel_error(high_prec post, high_prec pre) {
 static inline bool check_collission_ptr(const Particle* particle1, const Particle* particle2) {
     high_prec dx = particle2->x - particle1->x;
     high_prec dy = particle2->y - particle1->y;
+    high_prec dz = particle2->z - particle1->z;
 
-    high_prec dist2 = dx * dx + dy * dy;
+    high_prec dist2 = dx * dx + dy * dy + dz * dz;
     high_prec sum_radii = particle1->rad + particle2->rad;
 
     const high_prec thresh = sum_radii + EngineCore::collision_distance_tolerance_;
@@ -89,33 +90,41 @@ static inline bool check_collission_ptr(const Particle* particle1, const Particl
 
     high_prec nx = dx / distance;
     high_prec ny = dy / distance;
+    high_prec nz = dz / distance;
 
     high_prec rvx = particle2->vx - particle1->vx;
     high_prec rvy = particle2->vy - particle1->vy;
-    high_prec v_rel_n = rvx * nx + rvy * ny;
+    high_prec rvz = particle2->vz - particle1->vz;
+    high_prec v_rel_n = rvx * nx + rvy * ny + rvz * nz;
 
     return (v_rel_n < 0.0);
 }
 
 static inline void resolve_collission_ptr(Particle* particle1, Particle* particle2) {
-    high_prec KE_pre = 0.5L * particle1->m * (particle1->vx * particle1->vx + particle1->vy * particle1->vy)
-                     + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy);
+    high_prec KE_pre = 0.5L * particle1->m * (particle1->vx * particle1->vx + particle1->vy * particle1->vy + particle1->vz * particle1->vz)
+                     + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy + particle2->vz * particle2->vz);
 
     high_prec dx = particle2->x - particle1->x;
     high_prec dy = particle2->y - particle1->y;
-    high_prec distance = sqrt(dx * dx + dy * dy);
+    high_prec dz = particle2->z - particle1->z;
+    high_prec distance = sqrt(dx * dx + dy * dy + dz * dz);
     if (distance == 0.0) return;
 
     high_prec nx = dx / distance;
     high_prec ny = dy / distance;
+    high_prec nz = dz / distance;
 
-    high_prec tx = -ny;
-    high_prec ty = nx;
+    // Normal-direction velocity components (scalar projections)
+    high_prec v1n = particle1->vx * nx + particle1->vy * ny + particle1->vz * nz;
+    high_prec v2n = particle2->vx * nx + particle2->vy * ny + particle2->vz * nz;
 
-    high_prec v1n = particle1->vx * nx + particle1->vy * ny;
-    high_prec v1t = particle1->vx * tx + particle1->vy * ty;
-    high_prec v2n = particle2->vx * nx + particle2->vy * ny;
-    high_prec v2t = particle2->vx * tx + particle2->vy * ty;
+    // Tangential velocity components (full 3D vectors)
+    high_prec v1tx = particle1->vx - v1n * nx;
+    high_prec v1ty = particle1->vy - v1n * ny;
+    high_prec v1tz = particle1->vz - v1n * nz;
+    high_prec v2tx = particle2->vx - v2n * nx;
+    high_prec v2ty = particle2->vy - v2n * ny;
+    high_prec v2tz = particle2->vz - v2n * nz;
 
     high_prec combined_rest = std::min(particle1->rest, particle2->rest);
 
@@ -141,16 +150,16 @@ static inline void resolve_collission_ptr(Particle* particle1, Particle* particl
     high_prec v1n_new = (P - m2 * v_rel_target) / total_mass;
     high_prec v2n_new = v1n_new + v_rel_target;
 
-    high_prec v1t_new = v1t;
-    high_prec v2t_new = v2t;
+    // Reconstruct full 3D velocities from new normal + unchanged tangential
+    particle1->vx = v1n_new * nx + v1tx;
+    particle1->vy = v1n_new * ny + v1ty;
+    particle1->vz = v1n_new * nz + v1tz;
+    particle2->vx = v2n_new * nx + v2tx;
+    particle2->vy = v2n_new * ny + v2ty;
+    particle2->vz = v2n_new * nz + v2tz;
 
-    particle1->vx = v1n_new * nx + v1t_new * tx;
-    particle1->vy = v1n_new * ny + v1t_new * ty;
-    particle2->vx = v2n_new * nx + v2t_new * tx;
-    particle2->vy = v2n_new * ny + v2t_new * ty;
-
-    high_prec KE_post = 0.5L * particle1->m * (particle1->vx * particle1->vx + particle1->vy * particle1->vy)
-                      + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy);
+    high_prec KE_post = 0.5L * particle1->m * (particle1->vx * particle1->vx + particle1->vy * particle1->vy + particle1->vz * particle1->vz)
+                      + 0.5L * particle2->m * (particle2->vx * particle2->vx + particle2->vy * particle2->vy + particle2->vz * particle2->vz);
 
     high_prec energy_lost = KE_pre - KE_post;
     const high_prec EPSILON = 1e-10;
@@ -170,7 +179,7 @@ static void compute_gravity_forces(
     int n,
     long long* out_pair_calcs)
 {
-    std::fill(forces.begin(), forces.end(), Vector2D{0.0, 0.0});
+    std::fill(forces.begin(), forces.end(), Vector2D{0.0, 0.0, 0.0});
 
     if (!out_pair_calcs) {
         for (int i = 0; i < n; ++i) {
@@ -180,8 +189,9 @@ static void compute_gravity_forces(
 
                 high_prec dx = pj->x - pi->x;
                 high_prec dy = pj->y - pi->y;
+                high_prec dz = pj->z - pi->z;
 
-                high_prec dist2 = dx * dx + dy * dy + kGravitySofteningEps * kGravitySofteningEps;
+                high_prec dist2 = dx * dx + dy * dy + dz * dz + kGravitySofteningEps * kGravitySofteningEps;
                 high_prec distance = sqrt(dist2);
                 if (distance == 0) distance = kGravitySofteningEps;
 
@@ -189,11 +199,14 @@ static void compute_gravity_forces(
 
                 high_prec fx = force * (dx / distance);
                 high_prec fy = force * (dy / distance);
+                high_prec fz = force * (dz / distance);
 
                 forces[i].x += fx;
                 forces[i].y += fy;
+                forces[i].z += fz;
                 forces[j].x -= fx;
                 forces[j].y -= fy;
+                forces[j].z -= fz;
             }
         }
         return;
@@ -208,8 +221,9 @@ static void compute_gravity_forces(
 
             high_prec dx = pj->x - pi->x;
             high_prec dy = pj->y - pi->y;
+            high_prec dz = pj->z - pi->z;
 
-            high_prec dist2 = dx * dx + dy * dy + kGravitySofteningEps * kGravitySofteningEps;
+            high_prec dist2 = dx * dx + dy * dy + dz * dz + kGravitySofteningEps * kGravitySofteningEps;
             high_prec distance = sqrt(dist2);
             if (distance == 0) distance = kGravitySofteningEps;
 
@@ -217,11 +231,14 @@ static void compute_gravity_forces(
 
             high_prec fx = force * (dx / distance);
             high_prec fy = force * (dy / distance);
+            high_prec fz = force * (dz / distance);
 
             forces[i].x += fx;
             forces[i].y += fy;
+            forces[i].z += fz;
             forces[j].x -= fx;
             forces[j].y -= fy;
+            forces[j].z -= fz;
         }
     }
 }
@@ -229,45 +246,39 @@ static void compute_gravity_forces(
 // =======================
 // BARNES–HUT TREE HELPERS
 // =======================
-static inline int bh_quadrant(const BHNode& node, high_prec x, high_prec y) {
-    const bool east  = (x >= node.cx);
-    const bool north = (y >= node.cy);
-
-    // 0=NW, 1=NE, 2=SW, 3=SE
-    if (!east &&  north) return 0;
-    if ( east &&  north) return 1;
-    if (!east && !north) return 2;
-    return 3;
+// Octant index: bit0=east(x>=cx), bit1=north(y>=cy), bit2=up(z>=cz)
+static inline int bh_octant(const BHNode& node, high_prec x, high_prec y, high_prec z) {
+    return (x >= node.cx ? 1 : 0) | (y >= node.cy ? 2 : 0) | (z >= node.cz ? 4 : 0);
 }
 
-static inline void bh_child_center(const BHNode& node, int q, high_prec& out_cx, high_prec& out_cy) {
+static inline void bh_child_center(const BHNode& node, int q, high_prec& out_cx, high_prec& out_cy, high_prec& out_cz) {
     const high_prec h2 = node.half * 0.5;
-    switch (q) {
-        case 0: out_cx = node.cx - h2; out_cy = node.cy + h2; break; // NW
-        case 1: out_cx = node.cx + h2; out_cy = node.cy + h2; break; // NE
-        case 2: out_cx = node.cx - h2; out_cy = node.cy - h2; break; // SW
-        default:out_cx = node.cx + h2; out_cy = node.cy - h2; break; // SE
-    }
+    out_cx = node.cx + (q & 1 ? h2 : -h2);
+    out_cy = node.cy + (q & 2 ? h2 : -h2);
+    out_cz = node.cz + (q & 4 ? h2 : -h2);
 }
 
-static inline void bh_add_mass_com(BHNode& node, high_prec m, high_prec x, high_prec y) {
+static inline void bh_add_mass_com(BHNode& node, high_prec m, high_prec x, high_prec y, high_prec z) {
     const high_prec M0 = node.mass;
     const high_prec M1 = M0 + m;
     if (M1 == 0.0) return;
 
     node.comx = (node.comx * M0 + x * m) / M1;
     node.comy = (node.comy * M0 + y * m) / M1;
+    node.comz = (node.comz * M0 + z * m) / M1;
     node.mass = M1;
 }
 
-// collision prune: min distance from point to node square vs (ri + node.max_rad + tol)
+// collision prune: min distance from point to node cube vs (ri + node.max_rad + tol)
 static inline bool bh_prune_collision(const BHNode& node, const Particle* pi) {
     high_prec dx = abs_hp(pi->x - node.cx) - node.half;
     high_prec dy = abs_hp(pi->y - node.cy) - node.half;
+    high_prec dz = abs_hp(pi->z - node.cz) - node.half;
     if (dx < 0.0) dx = 0.0;
     if (dy < 0.0) dy = 0.0;
+    if (dz < 0.0) dz = 0.0;
 
-    const high_prec minDist2 = dx * dx + dy * dy;
+    const high_prec minDist2 = dx * dx + dy * dy + dz * dz;
     const high_prec R = pi->rad + node.max_rad + EngineCore::collision_distance_tolerance_;
     return (minDist2 > R * R);
 }
@@ -285,14 +296,14 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
             node.particle_index = -1;
         }
         node.bucket.push_back(idx);
-        bh_add_mass_com(node, p->m, p->x, p->y);
+        bh_add_mass_com(node, p->m, p->x, p->y, p->z);
         return;
     }
 
     // If node has bucket, keep bucketing
     if (!node.bucket.empty()) {
         node.bucket.push_back(idx);
-        bh_add_mass_com(node, p->m, p->x, p->y);
+        bh_add_mass_com(node, p->m, p->x, p->y, p->z);
         return;
     }
 
@@ -302,6 +313,7 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
         node.mass = p->m;
         node.comx = p->x;
         node.comy = p->y;
+        node.comz = p->z;
         return;
     }
 
@@ -314,17 +326,18 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
         node.mass = 0.0;
         node.comx = 0.0;
         node.comy = 0.0;
+        node.comz = 0.0;
 
         auto insert_into_child = [&](int id) {
             Particle* pp = list[id].get();
-            const int q = bh_quadrant(node, pp->x, pp->y);
+            const int q = bh_octant(node, pp->x, pp->y, pp->z);
             if (!node.child[q]) {
-                high_prec ccx, ccy;
-                bh_child_center(node, q, ccx, ccy);
-                node.child[q] = std::make_unique<BHNode>(ccx, ccy, node.half * 0.5);
+                high_prec ccx, ccy, ccz;
+                bh_child_center(node, q, ccx, ccy, ccz);
+                node.child[q] = std::make_unique<BHNode>(ccx, ccy, ccz, node.half * 0.5);
             }
             bh_insert(*node.child[q], id, list);
-            bh_add_mass_com(node, pp->m, pp->x, pp->y);
+            bh_add_mass_com(node, pp->m, pp->x, pp->y, pp->z);
         };
 
         insert_into_child(old_idx);
@@ -333,17 +346,17 @@ static void bh_insert(BHNode& node, int idx, std::vector<std::shared_ptr<Particl
     }
 
     // Internal node: insert into one child
-    const int q = bh_quadrant(node, p->x, p->y);
+    const int q = bh_octant(node, p->x, p->y, p->z);
     if (!node.child[q]) {
-        high_prec ccx, ccy;
-        bh_child_center(node, q, ccx, ccy);
-        node.child[q] = std::make_unique<BHNode>(ccx, ccy, node.half * 0.5);
+        high_prec ccx, ccy, ccz;
+        bh_child_center(node, q, ccx, ccy, ccz);
+        node.child[q] = std::make_unique<BHNode>(ccx, ccy, ccz, node.half * 0.5);
     }
 
     bh_insert(*node.child[q], idx, list);
 
     //
-    bh_add_mass_com(node, p->m, p->x, p->y);
+    bh_add_mass_com(node, p->m, p->x, p->y, p->z);
 }
 
 static std::unique_ptr<BHNode> build_bh_tree(std::vector<std::shared_ptr<Particle>>& list, int n) {
@@ -351,6 +364,7 @@ static std::unique_ptr<BHNode> build_bh_tree(std::vector<std::shared_ptr<Particl
 
     high_prec minx = list[0]->x, maxx = list[0]->x;
     high_prec miny = list[0]->y, maxy = list[0]->y;
+    high_prec minz = list[0]->z, maxz = list[0]->z;
 
     for (int i = 1; i < n; ++i) {
         const Particle* p = list[i].get();
@@ -358,16 +372,19 @@ static std::unique_ptr<BHNode> build_bh_tree(std::vector<std::shared_ptr<Particl
         if (p->x > maxx) maxx = p->x;
         if (p->y < miny) miny = p->y;
         if (p->y > maxy) maxy = p->y;
+        if (p->z < minz) minz = p->z;
+        if (p->z > maxz) maxz = p->z;
     }
 
     const high_prec cx = (minx + maxx) * 0.5;
     const high_prec cy = (miny + maxy) * 0.5;
+    const high_prec cz = (minz + maxz) * 0.5;
 
-    high_prec half = std::max(maxx - minx, maxy - miny) * 0.5;
+    high_prec half = std::max({maxx - minx, maxy - miny, maxz - minz}) * 0.5;
     if (half <= 0.0) half = kBHBoundsPad;
     half += kBHBoundsPad;
 
-    auto root = std::make_unique<BHNode>(cx, cy, half);
+    auto root = std::make_unique<BHNode>(cx, cy, cz, half);
 
     for (int i = 0; i < n; ++i) {
         bh_insert(*root, i, list);
@@ -383,8 +400,9 @@ static inline void add_force_pair(
 {
     high_prec dx = pj->x - pi->x;
     high_prec dy = pj->y - pi->y;
+    high_prec dz = pj->z - pi->z;
 
-    high_prec dist2 = dx * dx + dy * dy + kGravitySofteningEps * kGravitySofteningEps;
+    high_prec dist2 = dx * dx + dy * dy + dz * dz + kGravitySofteningEps * kGravitySofteningEps;
     high_prec dist  = sqrt(dist2);
     if (dist == 0.0) dist = kGravitySofteningEps;
 
@@ -392,6 +410,7 @@ static inline void add_force_pair(
 
     outFi.x += F * (dx / dist);
     outFi.y += F * (dy / dist);
+    outFi.z += F * (dz / dist);
 
     if (out_interactions) ++(*out_interactions);
 }
@@ -401,13 +420,15 @@ static inline void add_force_approx(
     high_prec mass,
     high_prec comx,
     high_prec comy,
+    high_prec comz,
     Vector2D& outFi,
     long long* out_interactions)
 {
     high_prec dx = comx - pi->x;
     high_prec dy = comy - pi->y;
+    high_prec dz = comz - pi->z;
 
-    high_prec dist2 = dx * dx + dy * dy + kGravitySofteningEps * kGravitySofteningEps;
+    high_prec dist2 = dx * dx + dy * dy + dz * dz + kGravitySofteningEps * kGravitySofteningEps;
     high_prec dist  = sqrt(dist2);
     if (dist == 0.0) dist = kGravitySofteningEps;
 
@@ -415,6 +436,7 @@ static inline void add_force_approx(
 
     outFi.x += F * (dx / dist);
     outFi.y += F * (dy / dist);
+    outFi.z += F * (dz / dist);
 
     if (out_interactions) ++(*out_interactions);
 }
@@ -451,20 +473,21 @@ static void bh_accumulate_force(
     // Barnes–Hut acceptance
     high_prec dx = node->comx - pi->x;
     high_prec dy = node->comy - pi->y;
+    high_prec dz = node->comz - pi->z;
 
-    high_prec dist2 = dx * dx + dy * dy + kGravitySofteningEps * kGravitySofteningEps;
+    high_prec dist2 = dx * dx + dy * dy + dz * dz + kGravitySofteningEps * kGravitySofteningEps;
     high_prec dist  = sqrt(dist2);
     if (dist == 0.0) dist = kGravitySofteningEps;
 
     const high_prec s = node->half * 2.0; // side length
     if ((s / dist) < kBHTheta) {
         // Approximate this node as one body at COM
-        add_force_approx(pi, node->mass, node->comx, node->comy, outFi, out_interactions);
+        add_force_approx(pi, node->mass, node->comx, node->comy, node->comz, outFi, out_interactions);
         return;
     }
 
     // Open node
-    for (int q = 0; q < 4; ++q) {
+    for (int q = 0; q < 8; ++q) {
         if (node->child[q]) {
             bh_accumulate_force(node->child[q].get(), i, list, outFi, out_interactions);
         }
@@ -477,14 +500,14 @@ static void compute_gravity_forcesBH(
     int n,
     long long* out_pair_calcs)
 {
-    std::fill(forces.begin(), forces.end(), Vector2D{0.0, 0.0});
+    std::fill(forces.begin(), forces.end(), Vector2D{0.0, 0.0, 0.0});
     if (n <= 0) return;
 
     auto root = build_bh_tree(list, n);
     if (!root) return;
 
     for (int i = 0; i < n; ++i) {
-        Vector2D Fi{0.0, 0.0};
+        Vector2D Fi{0.0, 0.0, 0.0};
         bh_accumulate_force(root.get(), i, list, Fi, out_pair_calcs);
         forces[i] = Fi;
     }
@@ -607,7 +630,8 @@ high_prec EngineCore::calculate_max_acceleration(std::shared_ptr<Particles> part
     for (int i = 0; i < (int)particles->particle_list.size(); i++) {
         high_prec vx = particles->particle_list[i]->vx;
         high_prec vy = particles->particle_list[i]->vy;
-        high_prec speed = sqrt(vx * vx + vy * vy);
+        high_prec vz = particles->particle_list[i]->vz;
+        high_prec speed = sqrt(vx * vx + vy * vy + vz * vz);
         high_prec accel_magnitude = speed / dt;
         if (accel_magnitude > max_accel) max_accel = accel_magnitude;
     }
@@ -719,6 +743,7 @@ void EngineCore::step(std::shared_ptr<Particles> particles, StepEnergyTrace* tra
                     Particle* p = list[i].get();
                     p->x += p->vx * dt;
                     p->y += p->vy * dt;
+                    p->z += p->vz * dt;
                 }
                 auto t1 = clock_t::now();
                 trace->integration_seconds += seconds_between(t0, t1);
@@ -793,6 +818,7 @@ void EngineCore::step(std::shared_ptr<Particles> particles, StepEnergyTrace* tra
         Particle* p = list[i].get();
         p->x += p->vx * dt;
         p->y += p->vy * dt;
+        p->z += p->vz * dt;
     }
 
     compute_gravity_forcesBH(cached_force_, list, n, nullptr);
@@ -805,7 +831,7 @@ void EngineCore::step(std::shared_ptr<Particles> particles, StepEnergyTrace* tra
 high_prec EngineCore::calculate_system_kinetic_energy(std::shared_ptr<Particles> particles) {
     high_prec KE = 0.0;
     for (const auto& p : particles->particle_list) {
-        KE += 0.5 * p->m * (p->vx * p->vx + p->vy * p->vy);
+        KE += 0.5 * p->m * (p->vx * p->vx + p->vy * p->vy + p->vz * p->vz);
     }
     return KE;
 }
@@ -826,7 +852,8 @@ high_prec EngineCore::calculate_system_potential_energy(std::shared_ptr<Particle
         for (int j = i + 1; j < n; j++) {
             high_prec dx = particles->particle_list[j]->x - particles->particle_list[i]->x;
             high_prec dy = particles->particle_list[j]->y - particles->particle_list[i]->y;
-            high_prec distance = sqrt(dx * dx + dy * dy + kEnergySofteningEps * kEnergySofteningEps);
+            high_prec dz = particles->particle_list[j]->z - particles->particle_list[i]->z;
+            high_prec distance = sqrt(dx * dx + dy * dy + dz * dz + kEnergySofteningEps * kEnergySofteningEps);
             PE += -kGravG * particles->particle_list[i]->m * particles->particle_list[j]->m / distance;
         }
     }
@@ -846,15 +873,16 @@ high_prec EngineCore::calculate_total_kinetic_energy(std::shared_ptr<Particles> 
 
 high_prec EngineCore::calculate_kinetic_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2) {
     high_prec KE = 0.0;
-    KE += 0.5 * p1->m * (p1->vx * p1->vx + p1->vy * p1->vy);
-    KE += 0.5 * p2->m * (p2->vx * p2->vx + p2->vy * p2->vy);
+    KE += 0.5 * p1->m * (p1->vx * p1->vx + p1->vy * p1->vy + p1->vz * p1->vz);
+    KE += 0.5 * p2->m * (p2->vx * p2->vx + p2->vy * p2->vy + p2->vz * p2->vz);
     return KE;
 }
 
 high_prec EngineCore::calculate_potential_energy(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2) {
     high_prec dx = p2->x - p1->x;
     high_prec dy = p2->y - p1->y;
-    high_prec distance = sqrt(dx * dx + dy * dy + kEnergySofteningEps * kEnergySofteningEps);
+    high_prec dz = p2->z - p1->z;
+    high_prec distance = sqrt(dx * dx + dy * dy + dz * dz + kEnergySofteningEps * kEnergySofteningEps);
     return -kGravG * p1->m * p2->m / distance;
 }
 
@@ -873,7 +901,8 @@ high_prec EngineCore::calc_TE_ij(std::shared_ptr<Particle> p1, std::shared_ptr<P
 high_prec EngineCore::calculate_overlap_amount(std::shared_ptr<Particle> p1, std::shared_ptr<Particle> p2) {
     high_prec dx = p1->x - p2->x;
     high_prec dy = p1->y - p2->y;
-    high_prec dist = sqrt(dx * dx + dy * dy);
+    high_prec dz = p1->z - p2->z;
+    high_prec dist = sqrt(dx * dx + dy * dy + dz * dz);
     high_prec sum_radii = p1->rad + p2->rad;
     return sum_radii - dist;
 }
@@ -924,5 +953,6 @@ void EngineCore::verlet_half_kick(std::vector<std::shared_ptr<Particle>>& list,
         Particle* p = list[i].get();
         p->vx += 0.5 * (forces[i].x / p->m) * dt;
         p->vy += 0.5 * (forces[i].y / p->m) * dt;
+        p->vz += 0.5 * (forces[i].z / p->m) * dt;
     }
 }
