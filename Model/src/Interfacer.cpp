@@ -14,7 +14,29 @@ using namespace std;
 // Constructor
 Interfacer::Interfacer() {
 
-   cout << "ParticleSimulator2 - By Braumeister Stefan (2026)" << endl << endl;
+   cout << "======================================================" << endl;
+   cout << "  ParticleSimulator2 - By Braumeister Stefan (2026)   " << endl;
+   cout << "======================================================" << endl << endl;
+
+   cout << "What this simulator can do for you:" << endl;
+   cout << "------------------------------------" << endl;
+   cout << "  * Simulate gravitational attraction and kinetic collisions" << endl;
+   cout << "    between n spherical particles in 2D space." << endl;
+   cout << "  * Support both elastic and inelastic (energy-absorbing)" << endl;
+   cout << "    collisions with configurable restitution parameters." << endl;
+   cout << "  * Generate complex objects (e.g. particle circles / clouds)" << endl;
+   cout << "    and save them to a cache for reuse across scenarios." << endl;
+   cout << "  * Load previously computed object states as building blocks" << endl;
+   cout << "    for new, more elaborate simulations." << endl;
+   cout << "  * Visualize every timestep live via GNUplot, with color-coded" << endl;
+   cout << "    temperature (heat glow) and adjustable playback speed." << endl;
+   cout << "  * Track physics metrics: kinetic energy, momentum conservation," << endl;
+   cout << "    total energy error, and frames-per-second performance." << endl;
+   cout << "  * Compare simulation runs against saved benchmarks to verify" << endl;
+   cout << "    correctness and measure computational performance." << endl;
+   cout << endl;
+   cout << "To get started, select a scenario from the list below." << endl;
+   cout << endl;
 } 
 
 // Destructor
