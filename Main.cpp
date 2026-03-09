@@ -41,7 +41,6 @@ int main() {
 
     if (model.engine->cache_exists(selected_scenario)) {
         particle_states = model.engine->run_from_cache(selected_scenario);
-        cout << "Particle states loaded from cache." << endl;
 
         particle_states  = model.metrics->compute_metrics(selected_scenario, particle_states);
     } else {
@@ -49,10 +48,7 @@ int main() {
         return 1;
     }
 
-    cout << "Dimensions of particle_states: " << particle_states->snaps.size() << " snapshots, "
-         << (particle_states->snaps.empty() ? 0 : particle_states->snaps[0]->particle_list.size()) << " particles per snapshot." << endl;
 
-    cout << "save_obj: " << selected_scenario->save_obj << endl;
 
     if (selected_scenario->save_obj != "FALSE") {
         //save the last particle state as a complex object

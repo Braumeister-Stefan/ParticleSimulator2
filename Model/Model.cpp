@@ -12,7 +12,7 @@ ParticleModel::ParticleModel() {
     metrics = make_unique<Metrics>();
     plotter = make_unique<Plotter>();
     obj_handler = make_unique<ObjHandler>();
-    cout << "DEBUG: ParticleModel constructed, engine address: " << engine.get() << endl;
+
 }
 
 // Destructor

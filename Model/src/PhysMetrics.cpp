@@ -14,7 +14,7 @@ using namespace std;
 
 // Constructor
 Metrics::Metrics() {
-    cout << "Metrics computor initialized." << endl;
+    //cout << "Metrics computor initialized." << endl;
 }
 
 // Destructor

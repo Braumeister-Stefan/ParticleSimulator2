@@ -43,10 +43,16 @@ private:
     // initializes/truncates cache and writes schema header; uses cache_exists()
     bool initiate_cache(shared_ptr<scenario> scenario);
 
-    void inspect_cache(const string& scenario_name);
+    bool inspect_cache(const string& scenario_name);
 
     // NEW: helper for progress logging (cache file size in MB)
-    static double check_mb(shared_ptr<scenario> scenario);
+    double check_mb(shared_ptr<scenario> scenario);
+
+    // Heat-brightness RGB packing (moved from Plotter)
+    void apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, shared_ptr<scenario> scenario);
+
+    // Rewrite entire cache file with current snapshot data (e.g. after RGB post-processing)
+    void rewrite_cache(shared_ptr<scenario> scenario, shared_ptr<snapshots> particle_states);
 
     EngineCore core;
 };

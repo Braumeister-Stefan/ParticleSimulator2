@@ -28,7 +28,6 @@ public:
     void playback_offline(const std::string& rendered_file);
 
     // RGB/heat
-    void apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, shared_ptr<scenario> scenario);
     int intensity_to_rgb(double r, double g, double b);
 
     shared_ptr<snapshots> heat_to_rgb(shared_ptr<snapshots> snapshots);
@@ -63,7 +62,7 @@ private:
     bool plot_bounds_ready_ = false;
 
     // Tunable padding
-    double plot_padding_frac_ = 0.15;
+    double plot_padding_frac_ = 0.1125;
 
     // Reused per-frame buffer to avoid repeated allocations
     std::string frame_buf_;

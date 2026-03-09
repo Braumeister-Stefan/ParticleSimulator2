@@ -22,10 +22,10 @@ using high_prec = EngineCore::high_prec;
 // NON-STRUCT PARAMETERS (TUNING KNOBS)
 // =======================
 // Barnes–Hut opening angle (smaller => more accurate, slower)
-static const high_prec kBHTheta = 0.7;
+static const high_prec kBHTheta = 0.9;
 
 // Smallest cell half-size allowed before we stop subdividing and use a bucket
-static const high_prec kBHMinHalf = 1e-9;
+static const high_prec kBHMinHalf = 1e-8;
 
 // Small padding to avoid zero-size root bounds
 static const high_prec kBHBoundsPad = 1e-9;
@@ -587,7 +587,7 @@ double EngineCore::seconds_between(const EngineCore::clock_t::time_point& start,
 // LIFECYCLE
 // =======================
 EngineCore::EngineCore() {
-    cout << "EngineCore initialized." << endl;
+    //cout << "EngineCore initialized." << endl;
 }
 
 // =======================

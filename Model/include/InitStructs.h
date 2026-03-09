@@ -27,6 +27,7 @@ struct scenario {
     bool try_cache; //if true, check if the scenario has been run before and use the results 
     bool refresh_obj; //if true, rebuild the complex objects
     string save_obj = "FALSE";
+    bool relax_overlaps = true; //if true, run overlap relaxation before saving object cache
 
     //[physics engine parameters]
     high_prec collision_distance_tolerance = 1e-5;
@@ -44,6 +45,9 @@ struct scenario {
     //[benchmark parameters] (-1 means no benchmark available)
     high_prec benchmark_te_error_pct = -1.0;
     high_prec benchmark_sim_time_sec = -1.0;
+
+    //[glow mode]
+    bool glow_mode = false;
 
 };
 
@@ -68,7 +72,7 @@ struct object {
     high_prec rad; //radius of sphere
     high_prec rest; //restitution parameter of sphere
     high_prec temp; //temperature of the particle
-    string complexity = "simple"; //if the object is complex, what is its shape, e.g simple, circle, square, etc.
+    string complexity = "SIMPLE"; //if the object is complex, what is its shape, e.g simple, circle, square, etc.
     high_prec complexity_size; //if the object is complex, what is its radius. empty for simple objects
     high_prec complexity_n = int(1);
     high_prec omega;

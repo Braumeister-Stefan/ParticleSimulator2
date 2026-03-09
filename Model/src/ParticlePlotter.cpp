@@ -65,7 +65,7 @@ static inline double abs_d(double v) { return (v < 0.0) ? -v : v; }
 } // namespace
 
 Plotter::Plotter() {
-    cout << "Plotting Engine initialized." << endl;
+
     // Small initial reserve; plot_GNU will grow this as needed
     frame_buf_.reserve(1024);
 }
@@ -78,9 +78,7 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
     debug_mode_ = scenario->debug_mode;
 
-    apply_heat_brightness_and_pack_rgb(particle_states, scenario);
-
-    // ---- Plot bounds: center-of-mass of FIRST frame ----
+    // ---- Plot bounds: COM + 98th-percentile from frame 0 ----
     bounds_from_com0(particle_states, plot_padding_frac_, plot_xmin_, plot_xmax_, plot_ymin_, plot_ymax_);
     plot_bounds_ready_ = true;
 
@@ -104,7 +102,7 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     }
 
     // Set N label once (particle count never changes).
-    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 textcolor rgb 'white'\n",
+    fprintf(gnuplotPipe, "set label 2 'N= %d' at screen 0.01,0.90 font 'Arial,80' textcolor rgb 'white'\n",
             static_cast<int>(particle_states->snaps[0]->particle_list.size()));
     fflush(gnuplotPipe);
 
@@ -129,7 +127,7 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
     const int totalIters = (n + step - 1) / step;
 
     // Progress logging setup (compute once)
-    const int progressStep = totalIters / 100; // same behavior: if 0, no progress printing
+    const int progressStep = totalIters / 20; // same behavior: if 0, no progress printing
 
     // Render frames (single pass; avoids rendering frame 0 twice)
     for (int i = 0; i < n; i += step) {
@@ -154,120 +152,11 @@ void Plotter::plot_run(shared_ptr<scenario> scenario, shared_ptr<snapshots> part
 
     cout << "Offline rendering completed." << endl;
 
+    //print number of frames in gif and particles per frame
+    cout << "Frames rendered: " << (n + step - 1) / step << " with " << particle_states->snaps[0]->particle_list.size() << " particles per frame." << endl;
+
     // ---- Autoplay after render completes ----
     playback_offline(offline_output_path_);
-}
-
-void Plotter::apply_heat_brightness_and_pack_rgb(shared_ptr<snapshots> snaps, shared_ptr<scenario> scenario) {
-
-    // Config: cutoff, gamma (cast once to double)
-    const double HEAT_CUTOFF_FRAC = static_cast<double>(scenario->heat_cutoff_frac);
-    const double HEAT_GAMMA       = static_cast<double>(scenario->heat_gamma);
-
-    auto& frames = snaps->snaps;
-    const int nf = static_cast<int>(frames.size());
-
-    double max_temp = 0.0;
-    double min_temp = std::numeric_limits<double>::max();
-
-    for (int i = 0; i < nf; ++i) {
-        auto& plist = frames[i]->particle_list;
-        const int np = static_cast<int>(plist.size());
-        for (int j = 0; j < np; ++j) {
-            const auto& p = plist[j];
-            const double t = static_cast<double>(p->temp);
-            if (t > max_temp) max_temp = t;
-            if (t < min_temp) min_temp = t;
-        }
-    }
-
-    if (frames.empty() || frames[0]->particle_list.empty()) min_temp = 0.0;
-    const double temp_range = max_temp - min_temp;
-
-    // Fast path: pack base rgb only (no heat tinting)
-    auto pack_base_rgb = [&]() {
-        for (int i = 0; i < nf; ++i) {
-            auto& plist = frames[i]->particle_list;
-            const int np = static_cast<int>(plist.size());
-            for (int j = 0; j < np; ++j) {
-                auto& p = plist[j];
-                const double r = static_cast<double>(p->r);
-                const double g = static_cast<double>(p->g);
-                const double b = static_cast<double>(p->b);
-
-                const int r255 = static_cast<int>(r * 255.0);
-                const int g255 = static_cast<int>(g * 255.0);
-                const int b255 = static_cast<int>(b * 255.0);
-                p->rgb = (r255 << 16) | (g255 << 8) | (b255);
-            }
-        }
-    };
-
-    if (max_temp < 1e-5) {
-        cout << "RGB values calculated (max temp < 0.00001, no heating applied)." << endl;
-        pack_base_rgb();
-        return;
-    }
-    if (temp_range <= 0.0) {
-        cout << "RGB values calculated (uniform temp: " << max_temp << ")." << endl;
-        pack_base_rgb();
-        return;
-    }
-
-    cout << "RGB values calculated (temp range: " << min_temp << " .. " << max_temp << ")." << endl;
-
-    const double cutoff_temp = min_temp + HEAT_CUTOFF_FRAC * temp_range;
-    const double denom = (max_temp - cutoff_temp);
-    if (denom <= 0.0) {
-        pack_base_rgb();
-        return;
-    }
-
-    const bool gamma_is_1 = (std::abs(HEAT_GAMMA - 1.0) < 1e-12);
-
-    for (int i = 0; i < nf; ++i) {
-        auto& plist = frames[i]->particle_list;
-        const int np = static_cast<int>(plist.size());
-        for (int j = 0; j < np; ++j) {
-            auto& p = plist[j];
-
-            const double t = static_cast<double>(p->temp);
-
-            double fraction = 0.0;
-            if (t > cutoff_temp) {
-                fraction = (t - cutoff_temp) / denom;
-                if (fraction < 0.0) fraction = 0.0;
-                if (fraction > 1.0) fraction = 1.0;
-
-                if (!gamma_is_1) {
-                    fraction = std::pow(fraction, HEAT_GAMMA);
-                }
-            }
-
-            double r = static_cast<double>(p->r);
-            double g = static_cast<double>(p->g);
-            double b = static_cast<double>(p->b);
-
-            const double brighten = fraction * 0.25;
-
-            r = r + (1.0 - r) * fraction + (1.0 - r) * brighten;
-            g = g * (1.0 - fraction) + (1.0 - g) * brighten;
-            b = b * (1.0 - fraction) + (1.0 - b) * brighten;
-
-            if (r > 1.0) r = 1.0;
-            if (g > 1.0) g = 1.0;
-            if (b > 1.0) b = 1.0;
-
-            p->r = r;
-            p->g = g;
-            p->b = b;
-
-            const int r255 = static_cast<int>(r * 255.0);
-            const int g255 = static_cast<int>(g * 255.0);
-            const int b255 = static_cast<int>(b * 255.0);
-            p->rgb = (r255 << 16) | (g255 << 8) | (b255);
-        }
-    }
 }
 
 void Plotter::init_GNU(shared_ptr<scenario> scenario) {
@@ -275,7 +164,7 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
 
     offline_output_path_ = "Inputs/rendered_scenarios/" + scenario->name + ".gif";
 
-    gnuplotPipe = popen("gnuplot", "w");
+    gnuplotPipe = popen("gnuplot 2>nul", "w");
     if (!gnuplotPipe) {
         cout << "ERROR: Failed to start gnuplot process." << endl;
         return;
@@ -284,12 +173,17 @@ void Plotter::init_GNU(shared_ptr<scenario> scenario) {
     string scenario_name = scenario->name;
     replace(scenario_name.begin(), scenario_name.end(), '_', ' ');
 
-    fprintf(gnuplotPipe, "set terminal gif animate delay 4 loop 0 size 3200,3200\n");
+    fprintf(gnuplotPipe, "set terminal gif animate delay 4 loop 0 size 6144,6144\n");
     fprintf(gnuplotPipe, "set output '%s'\n", offline_output_path_.c_str());
 
     fprintf(gnuplotPipe, "set object 1 rectangle from screen 0,0 to screen 1,1 behind fillcolor rgb '#000000' fillstyle solid 1.0\n");
 
-    fprintf(gnuplotPipe, "set title '%s' textcolor rgb 'white'\n", scenario_name.c_str());
+    fprintf(gnuplotPipe, "set tmargin 14\n");
+    fprintf(gnuplotPipe, "set bmargin 2\n");
+    fprintf(gnuplotPipe, "set lmargin 2\n");
+    fprintf(gnuplotPipe, "set rmargin 2\n");
+    
+    fprintf(gnuplotPipe, "set title '%s' font 'Arial,104' textcolor rgb 'white' offset 0,-7\n", scenario_name.c_str());
     fprintf(gnuplotPipe, "set size ratio -1\n");
     fprintf(gnuplotPipe, "set style fill solid 1.0 noborder\n");
     fprintf(gnuplotPipe, "unset key\n");
@@ -318,45 +212,45 @@ void Plotter::plot_GNU(shared_ptr<Particles> particles, shared_ptr<test_metrics_
         char line[256];
 
         snprintf(line, sizeof(line),
-                 "set label 1 'Step: %d' at screen 0.01,0.95 textcolor rgb 'white'\n",
+                 "set label 1 'Step: %d' at screen 0.01,0.95 font 'Arial,80' textcolor rgb 'white'\n",
                  current_step_label_);
         frame_buf_ += line;
 
         if (debug_mode_ && metrics_t) {
             snprintf(line, sizeof(line),
-                     "set label 3 'KE  = %.4e' at screen 0.01,0.85 font 'Consolas,9' textcolor rgb 'white'\n",
+                     "set label 3 'KE  = %.4e' at screen 0.01,0.85 font 'Consolas,60' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->KE));
             frame_buf_ += line;
 
             snprintf(line, sizeof(line),
-                     "set label 4 'PE  = %.4e' at screen 0.01,0.80 font 'Consolas,9' textcolor rgb 'white'\n",
+                     "set label 4 'PE  = %.4e' at screen 0.01,0.80 font 'Consolas,60' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->PE));
             frame_buf_ += line;
 
             snprintf(line, sizeof(line),
-                     "set label 5 'HE  = %.4e' at screen 0.01,0.75 font 'Consolas,9' textcolor rgb 'white'\n",
+                     "set label 5 'HE  = %.4e' at screen 0.01,0.75 font 'Consolas,60' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->HE));
             frame_buf_ += line;
 
             snprintf(line, sizeof(line),
-                     "set label 6 'TE  = %.4e' at screen 0.01,0.70 font 'Consolas,9' textcolor rgb 'white'\n",
+                     "set label 6 'TE  = %.4e' at screen 0.01,0.70 font 'Consolas,60' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->TE));
             frame_buf_ += line;
 
             snprintf(line, sizeof(line),
-                     "set label 7 'Px  = %.4e' at screen 0.01,0.65 font 'Consolas,9' textcolor rgb 'white'\n",
+                     "set label 7 'Px  = %.4e' at screen 0.01,0.65 font 'Consolas,60' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->mom_x));
             frame_buf_ += line;
 
             snprintf(line, sizeof(line),
-                     "set label 8 'Py  = %.4e' at screen 0.01,0.60 font 'Consolas,9' textcolor rgb 'white'\n",
+                     "set label 8 'Py  = %.4e' at screen 0.01,0.60 font 'Consolas,60' textcolor rgb 'white'\n",
                      static_cast<double>(metrics_t->mom_y));
             frame_buf_ += line;
 
             const double rel_err = static_cast<double>(metrics_t->relative_error);
             const char* err_color = (rel_err < 0.001) ? "#00FF00" : (rel_err < 0.01) ? "#FFFF00" : "#FF4444";
             snprintf(line, sizeof(line),
-                     "set label 9 'TE err = %.6e' at screen 0.01,0.54 font 'Consolas,9' textcolor rgb '%s'\n",
+                     "set label 9 'TE err = %.6e' at screen 0.01,0.54 font 'Consolas,60' textcolor rgb '%s'\n",
                      rel_err, err_color);
             frame_buf_ += line;
         }
@@ -416,6 +310,9 @@ void Plotter::playback_offline(const std::string& rendered_file) {
     std::string cmd = "xdg-open \"" + rendered_file + "\"";
     system(cmd.c_str());
 #endif
+
+    cout << "Press enter to close programme" << endl;
+    cin.get();
 }
 
 void Plotter::close_GNU() {
@@ -501,7 +398,7 @@ shared_ptr<snapshots> Plotter::heat_to_rgb(shared_ptr<snapshots> snapshots) {
 }
 
 // ---------------------------------------------------------
-// Plot bounds helpers (COM-based, doubles only)
+// Plot bounds helpers – COM + 98th-percentile from frame 0
 // ---------------------------------------------------------
 
 void Plotter::bounds_from_com0(shared_ptr<snapshots> snaps,
@@ -591,7 +488,7 @@ void Plotter::bounds_from_com0(shared_ptr<snapshots> snaps,
 
     double half = 0.0;
     if (!dists.empty()) {
-        const double q = 0.98; // requested 98% radial percentile
+        const double q = 0.95; // requested 98% radial percentile
         const size_t n = dists.size();
 
         // Use a conservative index so that at least ~98% are within bounds.
@@ -605,12 +502,49 @@ void Plotter::bounds_from_com0(shared_ptr<snapshots> snaps,
     if (half <= 0.0) half = 1.0;
 
     if (pad_frac < 0.0) pad_frac = 0.0;
-    half *= (1.0 + pad_frac);
+    half *= (1.0 + 10.0 * pad_frac);
 
     xmin = cx - half;
     xmax = cx + half;
     ymin = cy - half;
     ymax = cy + half;
+
+    // ---- Width ratio: last frame vs first frame ----
+    const double width_first = std::abs(xmax - xmin);
+
+    if (snaps->snaps.size() > 1) {
+        const auto& last = snaps->snaps.back();
+        if (last && !last->particle_list.empty()) {
+            double mn_x =  std::numeric_limits<double>::max();
+            double mx_x = -std::numeric_limits<double>::max();
+            double mn_y =  std::numeric_limits<double>::max();
+            double mx_y = -std::numeric_limits<double>::max();
+
+            for (const auto& p : last->particle_list) {
+                if (!p) continue;
+                const double x = static_cast<double>(p->x);
+                const double y = static_cast<double>(p->y);
+                const double r = static_cast<double>((p->rad > 0) ? p->rad : 0);
+                if (!std::isfinite(x) || !std::isfinite(y)) continue;
+                if (x - r < mn_x) mn_x = x - r;
+                if (x + r > mx_x) mx_x = x + r;
+                if (y - r < mn_y) mn_y = y - r;
+                if (y + r > mx_y) mx_y = y + r;
+            }
+
+            if (mn_x < mx_x && mn_y < mx_y) {
+                const double span_x_last = mx_x - mn_x;
+                const double span_y_last = mx_y - mn_y;
+                const double width_last  = (span_x_last > span_y_last) ? span_x_last : span_y_last;
+
+                if (width_first > 0.0) {
+                    cout << "Last/First frame width ratio: "
+                         << std::abs(width_last) / std::abs(width_first)
+                         << endl << endl;
+                }
+            }
+        }
+    }
 }
 
 void Plotter::append_ranges(std::string& buf) const {

@@ -11,11 +11,20 @@
 #include <memory>
 #include <cmath>
 #include <sstream>
+#include <iomanip>
+#include <limits>
 
 //to use pi
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+// =======================
+// CONFIGURATION
+// =======================
+// Toggle overlap relaxation post-processing when saving objects to cache.
+// Set to false to skip relaxation (objects may blow up on reload if overlaps exist).
+static bool RELAX_OVERLAPS = true;
 
 
 //namespaces
@@ -37,12 +46,8 @@ ObjHandler::~ObjHandler() {
 shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     //This function will load the list of objects for the selected scenario and flatten them into a single struct.
 
-    //0. List of objects to be loaded
-    cout << "Loading objects for the selected scenario:" << endl;
-
-    for (const auto& name : scenario->obj_list) {
-        cout << name;
-    }
+    // Set runtime post-processing toggle from selected scenario input.
+    RELAX_OVERLAPS = scenario->relax_overlaps;
 
 
     //1. Retrieve the object_inputs from csv file
@@ -97,15 +102,18 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
         new_object->rad = safe_stod(col12); 
         new_object->rest = safe_stod(col13);
         new_object->temp = safe_stod(col14);
+        
 
         if (col15.empty()) {
-            new_object->complexity = "simple";
+            new_object->complexity = "SIMPLE";
         } else {
             new_object->complexity = col15;
         }
 
         new_object->complexity_size = safe_stod(col16);
-        new_object->complexity_n = stoi(col17);
+
+        new_object->complexity_n = safe_stoi(col17);
+
         new_object->omega = safe_stod(col18);
 
         
@@ -118,9 +126,11 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     //print object id and names to the user
 
-    //for (int i = 0; i < object_list.object_list.size(); i++) {
-    //    cout << object_list.object_list[i]->object_id << ". " << object_list.object_list[i]->name << endl;
-    //}
+    // cout << "The following objects were found in object_inputs.csv:" << endl;
+
+    // for (int i = 0; i < object_list.object_list.size(); i++) {
+    //     cout << object_list.object_list[i]->object_id << ". " << object_list.object_list[i]->name << endl;
+    // }
 
 
     //4a. Retrieve the objects from the object_list that are in the obj_list of the selected scenario
@@ -148,6 +158,7 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
     for (string name; getline(ss, name, ','); ) {
         trim(name);
         bool found = false;
+
 
         for (auto &object : requested_objects->object_list) {
             if (object && object->name == name) { found = true; break; }
@@ -208,14 +219,9 @@ shared_ptr<Particles> ObjHandler::process_objs(shared_ptr<scenario> scenario) {
 
     //7. Remove overlapping particles with slop 
 
-    remove_overlaps2(particles, 0.1);
+    remove_overlaps2(particles, scenario->collision_distance_tolerance);
     
-
-    //8 Inform user of the number of particles loaded
-
-    cout << "Loaded " << particles->particle_list.size() << " particles." << endl;
-
-    //9. Return the particles struct
+    //8. Return the particles struct
 
 
 
@@ -240,8 +246,9 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
     int particles_loaded = 0;
     for (auto &object : requested_objects->object_list) {
 
-        
-        if (object->complexity == "simple") {
+        shared_ptr<Particles> complex_particles; // Ensure complex_particles is always declared
+
+        if (object->complexity == "SIMPLE") {
             
             
 
@@ -252,14 +259,10 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
 
             particles_loaded++;
 
-        } else {
+        } else if (object->complexity == "CIRCLE") {
             //flatten the complex object and store the particles in the particles struct
-            shared_ptr<Particles> complex_particles(new Particles);
-           
             //if the refresh_obj flag is false, attempt to retrieve the particles from the cache
             if (!scenario->refresh_obj) {
-
-                
                 complex_particles = obj_from_cache(object->name);
 
                 if (complex_particles == nullptr) {
@@ -267,25 +270,29 @@ shared_ptr<Particles> ObjHandler::flatten_objs(shared_ptr<objects> requested_obj
                 } else {
                     cout << "Loaded " << object->name << " from cache." << endl;
                 }
-                
-               
             } else {
-
                 complex_particles = flatten_complex_obj(object);
-                
             }
 
-            //add the particles to the particles struct
-            particles->particle_list.insert(particles->particle_list.end(), complex_particles->particle_list.begin(), complex_particles->particle_list.end());
+        } else if (obj_from_cache(object->complexity) != nullptr) {
+
             
+            complex_particles = obj_from_cache(object->complexity);
+            //manipulate the positions, velocities and rotation of the cached object.
+            overwrite_rendered_obj(complex_particles, object);
 
-           particles_loaded += particles->particle_list.size();
-
-            cout << "particle_list has size " << particles->particle_list.size() << endl;
-
+        } else {
+            cout << "Complex object is a " << object->complexity << ". This shape is not supported." << endl;
+            continue;
         }
 
-        
+        //add the particles to the particles struct
+        if (complex_particles) {
+            particles->particle_list.insert(particles->particle_list.end(), complex_particles->particle_list.begin(), complex_particles->particle_list.end());
+            particles_loaded += static_cast<int>(complex_particles->particle_list.size());
+        }
+
+        //cout << "particle_list has size " << particles->particle_list.size() << endl;
     }
 
     // Reset particle_id for all particles
@@ -478,13 +485,12 @@ shared_ptr<Particles> ObjHandler::obj_from_cache(string obj_name){
     bool cache_exists = false;
 
     string cache_path = "Inputs/rendered_objects/" + obj_name + ".csv";
-    cout << "Checking for cache file at " << cache_path << endl;
 
     ifstream cache_file(cache_path);
 
     if (cache_file.good()) {
         cache_exists = true;
-        cout << "Cache file found for object " << obj_name << "." << endl;
+        //cout << "Cache file found for object " << obj_name << "." << endl;
     }
 
     //2. if the cache file exists, read the particles from the cache file and store them in a particles struct
@@ -636,13 +642,22 @@ void ObjHandler::state_to_cache(shared_ptr<Particles> final_state, string obj_na
 
 
 
-    // 3. Write the header row
+    // 3. Post-process: resolve any remaining particle overlaps before writing.
+    //    Strictly positional — no velocity changes.
+    if (RELAX_OVERLAPS) {
+        cout << "Running overlap relaxation before saving..." << endl;
+        int relax_iters = relax_overlaps(final_state);
+        if (relax_iters == 0) {
+            cout << "No overlaps detected - object is clean." << endl;
+        }
+    } else {
+        cout << "Overlap relaxation disabled - saving without post-processing." << endl;
+    }
+
+    // 4. Write the header row
     cache_file << "PARTICLE_ID,R,G,B,X,Y,Z,VX,VY,VZ,M,RAD,REST,TEMP,COMPLEXITY,COMPLEXITY_SIZE,COMPLEXITY_N\n";
 
-    // 4. Write the particles to the cache file
-
-    
-
+    // 5. Write the particles to the cache file
     for (const auto& particle : final_state->particle_list) {
         cache_file << particle->particle_id << ","
                 << particle->r << ","
@@ -667,12 +682,239 @@ void ObjHandler::state_to_cache(shared_ptr<Particles> final_state, string obj_na
 
     }
 
-    // 5. Close the cache file
+    // 6. Close the cache file
     cache_file.close();
 
     cout << "Simulation result saved as object: " <<  obj_name << "." << endl;
 }
 
+// =======================
+// ITERATIVE POSITIONAL RELAXATION  (Jacobi + under-relaxation)
+// =======================
+// Pairwise center-to-center direction. Each iteration:
+//   1. Scan all pairs — for each overlapping pair, compute the displacement
+//      needed to separate them along the center-to-center axis, split by
+//      inverse mass (heavier particle moves less, CoM preserved).
+//   2. Accumulate displacements into per-particle buffers (Jacobi: no
+//      position is written during the scan).
+//   3. Apply all accumulated displacements at once, scaled by a relaxation
+//      factor to prevent overcorrection cascades in dense packings.
+//
+// Strictly positional — velocities are never touched.
+// Terminates when:
+//   - Zero overlaps remain, OR
+//   - max_iterations reached, OR
+//   - cumulative overlap has not improved for 100 consecutive iterations.
+int ObjHandler::relax_overlaps(shared_ptr<Particles> particles, int max_iterations, high_prec separation_margin) {
+    auto& list = particles->particle_list;
+    const int n = static_cast<int>(list.size());
+    if (n < 2) return 0;
+
+    // Default: 100 * particle count
+    if (max_iterations < 0) max_iterations = 0.1 * n;
+
+    // --- Helper: count overlaps and cumulative overlap ---
+    auto measure_overlaps = [&](high_prec margin) -> std::pair<int, high_prec> {
+        int count = 0;
+        high_prec cumulative = 0.0;
+        for (int i = 0; i < n; ++i) {
+            const Particle* pi = list[i].get();
+            for (int j = i + 1; j < n; ++j) {
+                const Particle* pj = list[j].get();
+                high_prec dx = pj->x - pi->x;
+                high_prec dy = pj->y - pi->y;
+                high_prec dist2 = dx * dx + dy * dy;
+                high_prec target = pi->rad + pj->rad + margin;
+                if (dist2 < target * target) {
+                    high_prec dist = sqrt(dist2);
+                    cumulative += (target - dist);
+                    ++count;
+                }
+            }
+        }
+        return {count, cumulative};
+    };
+
+    // --- Initial measurements ---
+    auto [initial_overlaps, initial_cumulative] = measure_overlaps(separation_margin);
+
+    cout << "[relax_overlaps] " << n << " particles, "
+         << initial_overlaps << " overlapping pair(s), "
+         << "cumulative overlap: " << std::scientific << std::setprecision(4)
+         << initial_cumulative << std::fixed << endl;
+    cout << "[relax_overlaps] COLLISION_DIST_TOL = " << std::scientific << std::setprecision(4)
+         << EngineCore::collision_distance_tolerance_ << std::fixed
+         << " (will stop if worst overlap falls below this)" << endl;
+
+    if (initial_overlaps == 0) return 0;
+
+    // --- Jacobi buffers ---
+    struct Disp { high_prec dx = 0, dy = 0; };
+    std::vector<Disp> accum(n);
+
+    // Under-relaxation factor
+    const high_prec relaxation_factor = 0.4;
+
+    int iter = 0;
+    int total_corrections = 0;
+    int last_reported_bucket = -5;
+
+    // Stall detection: stop after 10 iterations with no improvement
+    high_prec best_cumulative = initial_cumulative;
+    int no_improvement_count = 0;
+    const int no_improvement_limit = 10;
+
+    // Relative-improvement stall: stop if improvement stays below 0.1%
+    // for more than 10 consecutive iterations.
+    high_prec prev_cumulative = initial_cumulative;
+    int low_improvement_count = 0;
+    const high_prec min_relative_improvement = 0.001; // 0.1%
+    const int low_improvement_limit = 30;
+
+    for (; iter < max_iterations; ++iter) {
+        int corrections_this_pass = 0;
+        high_prec worst_overlap = 0.0;
+        high_prec cumulative_this_pass = 0.0;
+
+        // Reset accumulation buffers
+        for (int k = 0; k < n; ++k) { accum[k].dx = 0; accum[k].dy = 0; }
+
+        // --- Accumulate corrections (read current positions, don't write yet) ---
+        for (int i = 0; i < n; ++i) {
+            const Particle* pi = list[i].get();
+            for (int j = i + 1; j < n; ++j) {
+                const Particle* pj = list[j].get();
+
+                high_prec dx = pj->x - pi->x;
+                high_prec dy = pj->y - pi->y;
+                high_prec dist2 = dx * dx + dy * dy;
+                high_prec sum_radii = pi->rad + pj->rad;
+                high_prec target = sum_radii + separation_margin;
+
+                if (dist2 >= target * target) continue;
+
+                high_prec dist = sqrt(dist2);
+                if (dist < 1e-30) {
+                    dx = 1.0;
+                    dy = 0.0;
+                    dist = 1e-30;
+                }
+
+                high_prec overlap = target - dist;
+                cumulative_this_pass += overlap;
+                if (overlap > worst_overlap) worst_overlap = overlap;
+
+                high_prec nx = dx / dist;
+                high_prec ny = dy / dist;
+
+                // Mass-weighted split (heavier particle moves less)
+                high_prec total_mass = pi->m + pj->m;
+                high_prec wi = pj->m / total_mass;
+                high_prec wj = pi->m / total_mass;
+
+                accum[i].dx -= wi * overlap * nx;
+                accum[i].dy -= wi * overlap * ny;
+                accum[j].dx += wj * overlap * nx;
+                accum[j].dy += wj * overlap * ny;
+
+                ++corrections_this_pass;
+            }
+        }
+
+        if (corrections_this_pass == 0) break; // fully relaxed
+
+        // --- Apply accumulated displacements with under-relaxation ---
+        for (int k = 0; k < n; ++k) {
+            list[k]->x += relaxation_factor * accum[k].dx;
+            list[k]->y += relaxation_factor * accum[k].dy;
+        }
+
+        total_corrections += corrections_this_pass;
+
+        // --- Relative improvement check on cumulative overlap ---
+        high_prec improvement = prev_cumulative - cumulative_this_pass;
+        high_prec denom = (prev_cumulative > 1e-30) ? prev_cumulative : 1e-30;
+        high_prec relative_improvement = improvement / denom;
+        if (relative_improvement < min_relative_improvement) {
+            ++low_improvement_count;
+        } else {
+            low_improvement_count = 0;
+        }
+        prev_cumulative = cumulative_this_pass;
+
+        if (low_improvement_count > low_improvement_limit) {
+            cout << "[relax_overlaps] Relative improvement below "
+                 << (min_relative_improvement * 100.0) << "% for more than "
+                 << low_improvement_limit << " iterations (latest: "
+                 << std::scientific << std::setprecision(4)
+                 << (relative_improvement * 100.0) << "%"
+                 << std::fixed << ") - stopping early." << endl;
+            ++iter;
+            break;
+        }
+
+        // --- Stall detection on cumulative overlap ---
+        if (cumulative_this_pass < best_cumulative) {
+            best_cumulative = cumulative_this_pass;
+            no_improvement_count = 0;
+        } else {
+            ++no_improvement_count;
+        }
+        if (no_improvement_count >= no_improvement_limit) {
+            cout << "[relax_overlaps] Cumulative overlap stalled at "
+                 << std::scientific << std::setprecision(4) << cumulative_this_pass
+                 << std::fixed << " for " << no_improvement_limit
+                 << " iterations - stopping early." << endl;
+            ++iter;
+            break;
+        }
+
+        // --- Tolerance check: stop if worst overlap is below collision distance tolerance ---
+        if (worst_overlap < EngineCore::collision_distance_tolerance_) {
+            cout << "[relax_overlaps] Worst overlap " << std::scientific << std::setprecision(4)
+                 << worst_overlap << " is below collision distance tolerance "
+                 << EngineCore::collision_distance_tolerance_ << std::fixed
+                 << " - stopping." << endl;
+            ++iter;
+            break;
+        }
+
+        // --- Progress logging (every 5%) ---
+        if (max_iterations > 0) {
+            int pct = (int)(((long long)(iter + 1) * 100LL) / (long long)max_iterations);
+            int bucket = (pct / 0.001) * 0.001;
+            if (bucket > last_reported_bucket && bucket <= 100) {
+                cout << "[relax_overlaps] " << bucket << "% (" << (iter + 1) << "/" << max_iterations
+                     << " iters) " << corrections_this_pass << " overlap(s), worst: "
+                     << std::scientific << std::setprecision(3) << worst_overlap
+                     << " (tol: " << std::setprecision(3) << EngineCore::collision_distance_tolerance_ << ")"
+                     << ", cumulative: " << std::setprecision(4) << cumulative_this_pass
+                     << ", rel_impr: " << std::setprecision(3) << (relative_improvement * 100.0) << "%"
+                     << ", low-impr streak: " << low_improvement_count << "/" << low_improvement_limit
+                     << std::fixed << endl;
+                last_reported_bucket = bucket;
+            }
+        }
+    }
+
+    // --- Final measurements ---
+    auto [final_overlaps, final_cumulative] = measure_overlaps(separation_margin);
+
+    // --- Summary ---
+    cout << "[relax_overlaps] Done. "
+         << iter << " iteration(s), "
+         << total_corrections << " positional correction(s)." << endl;
+    cout << "[relax_overlaps] Overlaps: " << initial_overlaps << " -> " << final_overlaps
+         << ". Cumulative overlap: " << std::scientific << std::setprecision(4)
+         << initial_cumulative << " -> " << final_cumulative
+         << std::fixed << endl;
+    if (final_overlaps > 0) {
+        cout << "[relax_overlaps] WARNING: " << final_overlaps
+             << " overlap(s) remain after " << iter << " iterations." << endl;
+    }
+
+    return iter;
+}
 
 void ObjHandler::remove_overlaps(shared_ptr<Particles> particles) {
     // Iterate from the back so that newly-appended particles (at the end)
@@ -740,6 +982,7 @@ bool ObjHandler::remove_overlap(shared_ptr<Particle> particle1, shared_ptr<Parti
 }
 
 double ObjHandler::safe_stod(string str) {
+
     // Function to safely convert string to double, defaulting to 0.0 if empty or non-convertible
     if (str.empty()) {
         return 0.0; // Return 0.0 if string is empty
@@ -751,4 +994,58 @@ double ObjHandler::safe_stod(string str) {
 
     return stod(str); // Convert string to double
     
+}
+
+int ObjHandler::safe_stoi(string str) {
+
+    // Function to safely convert string to int, defaulting to 0 if empty or non-convertible
+    if (str.empty()) {
+        return 0; // Return 0 if string is empty
+    }
+
+    return stoi(str); // Convert string to int
+    
+}
+
+
+
+void ObjHandler::overwrite_rendered_obj(shared_ptr<Particles> complex_particles, shared_ptr<object> object) {
+    // This function will overwrite the positions, velocities and rotation of the cached object with the parameters of the complex object
+
+    Vector2D new_center = { object->x, object->y };
+    high_prec boost_omega = object->omega;
+
+    // 1. Calculate the current center of mass of the complex_particles
+
+    Vector2D current_center = {0, 0};
+    for (const auto& particle : complex_particles->particle_list) {
+        current_center.x += particle->x;
+        current_center.y += particle->y;
+    }
+    current_center.x /= complex_particles->particle_list.size();
+    current_center.y /= complex_particles->particle_list.size();
+
+    // if x,y,vx,vy, omega are empty, set value to zero
+
+    // 2. Calculate the translation vector from the current center to the new center
+
+    Vector2D translation = { new_center.x - current_center.x, new_center.y - current_center.y };
+
+    // 3. Apply the translation and rotation to each particle in complex_particles
+    for (const auto& particle : complex_particles->particle_list) {
+        // Translate
+        particle->x += translation.x;
+        particle->y += translation.y;
+
+        //update velocity 
+        particle->vx += object->vx;
+        particle->vy += object->vy;
+
+
+        // Rotate
+        add_rotation(*particle, new_center, boost_omega);
+    }
+ 
+
+    cout << "Loaded " << object->name << " from pre-rendered template: " << object->complexity << endl;
 }

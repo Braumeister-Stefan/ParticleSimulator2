@@ -14,12 +14,12 @@ using namespace std;
 // Constructor
 Interfacer::Interfacer() {
 
-    cout << "Interfacer initialized." << endl;
+   cout << "ParticleSimulator2 - By Braumeister Stefan (2026)" << endl << endl;
 } 
 
 // Destructor
 Interfacer::~Interfacer() {
-    cout << "Interfacer destroyed." << endl;
+    //cout << "Interfacer destroyed." << endl;
 }
 
 void Interfacer::setup_console_window() {
@@ -45,7 +45,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     typedef io::trim_chars<' ', '\t'> TrimPolicy;
     typedef io::double_quote_escape<',', '\"'> QuotePolicy;
 
-    const int column_count = 17;
+    const int column_count = 19;
 
     io::CSVReader<column_count, TrimPolicy, QuotePolicy> in(scenario_input_path);
     
@@ -54,7 +54,7 @@ shared_ptr<scenario> Interfacer::select_scenario() {
     //scenario new_scenario;
     scenarios scenario_list;
 
-    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17;
+    string col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19;
 
 
     int scenarios_loaded = 1;
@@ -64,9 +64,9 @@ shared_ptr<scenario> Interfacer::select_scenario() {
         "SAVED_OBJ", "COLLISION_DIST_TOL",
         "HEAT_GAMMA", "HEAT_CUTOFF_FRAC", "PLOT_SPEED_MULTIPLIER",
         "BENCHMARK_TE_ERROR_PCT", "BENCHMARK_SIM_TIME_SEC",
-        "TRY_CACHE", "REFRESH_OBJ", "DEBUG_MODE", "REPORT_ENERGY_PER_STEP", "SAVE_SCENARIO");
+        "TRY_CACHE", "REFRESH_OBJ", "DEBUG_MODE", "REPORT_ENERGY_PER_STEP", "SAVE_SCENARIO", "GLOW_MODE", "RELAX_OVERLAPS");
 
-    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17)) {
+    while(in.read_row(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19)) {
 
         unique_ptr<scenario> new_scenario(new scenario);
 
@@ -99,6 +99,8 @@ shared_ptr<scenario> Interfacer::select_scenario() {
         new_scenario-> debug_mode = (col15 == "TRUE");
         new_scenario-> report_energy_per_step = (col16 == "TRUE");
         new_scenario-> save_scenario = (col17 == "TRUE");
+        new_scenario-> glow_mode = (col18 == "TRUE");
+        new_scenario-> relax_overlaps = (col19 != "FALSE");
 
 
         
@@ -148,6 +150,8 @@ shared_ptr<scenario> Interfacer::select_scenario() {
             cout << "Debug Mode: " << scenario_list.scenario_list[i]->debug_mode << endl;
             cout << "Report Energy Per Step: " << scenario_list.scenario_list[i]->report_energy_per_step << endl;
             cout << "Save Scenario: " << scenario_list.scenario_list[i]->save_scenario << endl;
+            cout << "Glow Mode: " << scenario_list.scenario_list[i]->glow_mode << endl;
+            cout << "Relax Overlaps: " << scenario_list.scenario_list[i]->relax_overlaps << endl;
         }
     }
     cout << endl;
