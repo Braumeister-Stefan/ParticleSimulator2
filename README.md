@@ -65,7 +65,7 @@ proofofconcept09-03-26.gif shows the capacity of the code after these changes.
 Next steps:
 -Provide further capstone use cases to demonstrate the projects abilities to its fullest
 -Clean up readme: at minimum all project files are to be properly discussed, a basic user guide on how to use the code (parameter choices mainly), an overview of lessons learned in the entire project and suggestions for future directions to be taken (Either for a ParticleSimulator3, or if anyone is interested building on top of the code).
-
+-Figure out if I can make this a nice clean release
 
 
 ### Notes (01/03/26)
@@ -79,7 +79,6 @@ Following BH implementation, I was able to increase the simulation sizes, which 
 
 Besides the above, some minor refactoring was done to make the logging more intuitive and the camera is now oriented based on the center of mass. 
 
-After 1 year and 9 months on this project I finally have reached the end
 
 ### Notes (14/02/26)
 This branch will focus on the implementation of Barnes-Hut approximation algorithm to reduce the complexity from O(n^2) to O(nlogn). Any results are to be carefully validated against BH_validationset scenario to evaluate speedup and error between the baseline and a BH quadtree. Proper logging of time and energy is set up to make this process more rigorous
