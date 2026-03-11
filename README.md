@@ -84,7 +84,10 @@ Besides the above, some minor refactoring was done to make the logging more intu
 This branch will focus on the implementation of Barnes-Hut approximation algorithm to reduce the complexity from O(n^2) to O(nlogn). Any results are to be carefully validated against BH_validationset scenario to evaluate speedup and error between the baseline and a BH quadtree. Proper logging of time and energy is set up to make this process more rigorous
 
 ### Notes (08/02/26)
-Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. For evidence, see proofofconcept01-02-26.gif.
+Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. 
+
+This allows some more complex simulations. For evidence, see proofofconcept01-02-26.gif
+![Demo GIF](proofofconcept01-02-26.gif)
 
 Some secondary changes
 * RGB assignment is reworked. Now it should give more apparant heating visuals as is shown in the POC. Choosing the right parameters for most appealing/informative visual seems to be more of an art.
