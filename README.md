@@ -59,6 +59,8 @@ This change focusses on building of planets and moons. Objects can now be saved 
 A minor update was made to the particle brightening when heated up so its less sensitive to outliers.
 
 proofofconcept09-03-26.gif shows the capacity of the code after these changes. 
+![Demo GIF](proofofconcept09-03-26.gif)
+
 
 Next steps:
 -Provide further capstone use cases to demonstrate the projects abilities to its fullest
