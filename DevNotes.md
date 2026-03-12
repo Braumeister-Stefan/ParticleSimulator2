@@ -24,7 +24,19 @@ Following BH implementation, I was able to increase the simulation sizes, which 
 1) Memory overflow and code crashing: Particle states were added for each timestep which created huge objects in memory. To resolve this, a cache system was implemented which would write to a cache every n steps and release the memory. This was effective as the code does not crash anymore for particles <75k. Furthermore, in case the code crashes, cache can easily be restored so progress is not lost. To ensure cache sizes don't rise to be prohibitive, a parameter is set to only save 1/m states to the cache. 
 2) Particle Rendering: Even though simulation and plotting steps are separate, GNUplot struggled with rendering more than a few thousand particles per second, thereby frame rate was too low to give a dynamic video. The solution is to separate rendering and playback. Now, GNUplot generates one frame and then saves it to a .gif. A user customizable parameter can make the rendering less granular to speed up. For a large simulation, rendering takes about 10% of the time of simulation, which is more than ideal, but I can tolerate it.
 
-Besides the above, some minor refactoring was done to make the logging more intuitive and the camera is now oriented based on the center of mass. 
+Besides the above, some minor refactoring was done to make the logging more intuitive and the camera is now oriented based on the center of mass. To illustrate capacity of the code at current stage, see the gif below:
+![Demo GIF](POC 5-03-2026.gif)
+
+### Notes (19/02/26)
+
+Implemented a barnes hut algorithm for gravity and used the same quadtree for pruning collission checks. See other branche.
+
+Barnes Hut seems to give a decent speed up but error does approach threshold of 1% which I ideally want to stay below. Pruning is highly beneficial as previously 0.2% of checks resulted in a collission, compared to 7% for the validation set now.
+
+Due to the increased efficiency, larger simulations are now possible, which lead to unexpected code crashes. My guess would be that I keep appending particle states to the same object in memory until my RAM is insufficient. To fix this, a cache system has been implemented that saves the computed frames regularly. this has two benefits: 1) frees up RAM and avoids crashes, 2) if there is a crash/manually stopped the programme simply re-running it will pick up at last cached step.
+
+Work ahead is to slightly better optimize the BH and quadtree pruning set up, allow for parameters to be user accessible and clean up the cache system introduced (which is very messy at present).
+
 
 
 ### Notes (14/02/26)
