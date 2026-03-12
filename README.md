@@ -1,30 +1,24 @@
-# ParticleSimulator2
+# ParticleSimulator2 (2026)
 
 ## Project description
 
 This project aims to improve upon the lessons learned from ParticleSimulator1. The objective is to simulate in 2 dimensions, the kinetic and gravitational interactions of n spheroids in an optimized way.
 
 ## Objectives
+Below are the main objectives I set myself to reach before considering the project a success. After 1 year and 8 months, all objectives were reached. I tried to log my learning journey and the project evolution towards these objectives in [DevNotes](DevNotes.md).
 
 ### Primary objectives
 
-*	Separate code in header and source files [Done]
+*	Separate code in header and source files [DONE]
 *	Use smart pointers. Each particle should only be defined once.  [DONE]
-*	Implement a quadtree (store the O(n^n) design for comparison)  - [DONE] 
+*	Implement a quadtree (store the O(n^n) design for comparison)   [DONE]
+
 ### Secondary objectives
 
-* Loading of objects/run, user interface to navigate options, using .csv instead of .txt - 29/9: csv implemented, changing parameters is much user friendlier now.(see devnotes) [DONE]
-*	Implement a simple helper function that can be wrapped around any function and prints run time to measure efficiency [Done]
-*	Allow for particle radius and particle mass to be individualized - 29/9: physics seem reasonable but not validated yet [DONE]
-*	Separate computation and play-back of simulations - [DONE]
-
-## Recycling from ParticleSimulator1
-
-The elements below are to be recycled from ParticleSimulator1, in accordance with the primary and secondary objectives:
-*	Kinetic Collission function (including detection, backtracking and resolution) [DONE]
-*	Complex object generation (sphere only is OK) (including storage of complex object) [DONE]
-*	GNUplot plotting engine [DONE]
-*	Kinetic energy, momentum, fps trackers [DONE]
+* Loading of objects/run, user interface to navigate options, using .csv instead of .txt [DONE]
+*	Implement a simple helper function that can be wrapped around any function and prints run time to measure efficiency [DONE]
+*	Allow for particle radius and particle mass to be individualized [DONE]
+*	Separate computation and play-back of simulations [DONE]
 
 ## Project structure
 
