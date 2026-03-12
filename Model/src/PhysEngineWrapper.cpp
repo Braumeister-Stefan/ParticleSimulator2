@@ -41,7 +41,7 @@ static const int  kStepPauseInterval = 100;
 // CACHE CONFIG
 // =======================
 static const int  kCacheWriteEveryN     = 50;     // Save every Nth snapshot within a flush chunk
-static const int  kCacheFlushEverySteps = 5000;   // flush every N simulation timesteps
+static const int  kCacheFlushEverySteps = 1000;   // flush every N simulation timesteps
 // Heat-brightness (glow mode) is now controlled by scenario->glow_mode
 
 // =======================
