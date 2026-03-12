@@ -95,7 +95,7 @@ Possible next steps to look into a solution is to investigate why it seems that 
 
 ![Demo GIF](proofofconcept25-01-25.gif)
 
-![Demo PNG](problematic_energy and time.png)
+![Demo PNG](problematic_energy%20and%20time.png)
 
 
 
