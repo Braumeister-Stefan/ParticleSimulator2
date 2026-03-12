@@ -116,6 +116,8 @@ number of particles, fps tracker on the plot handled through the metrics and plo
 Issues:
 When to use unique_ptr and when to use shared_ptr? I see the logic of pointers giving the benefit of clear memory allocation and deallocation. However, they require complex syntax. I will try to use them in computationally demanding parts of the code, but not simple ones such as reading and writing inputs.
 
+I decided to abandon my goal to use classes instead of structs. Classes seem to differ mostly in access rights and are only usefull when I learn about inheritance and polymorphism. I will stick to structs for now. [Abandoned]
+
 ### Notes (25/9/24)
 I replicated the basic structure from ParticleSimulator1, though for 2D instead of 3D to simplify things. Proof of a simple gravity & kinetic system below:
 
