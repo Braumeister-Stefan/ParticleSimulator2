@@ -25,6 +25,7 @@ Following BH implementation, I was able to increase the simulation sizes, which 
 2) Particle Rendering: Even though simulation and plotting steps are separate, GNUplot struggled with rendering more than a few thousand particles per second, thereby frame rate was too low to give a dynamic video. The solution is to separate rendering and playback. Now, GNUplot generates one frame and then saves it to a .gif. A user customizable parameter can make the rendering less granular to speed up. For a large simulation, rendering takes about 10% of the time of simulation, which is more than ideal, but I can tolerate it.
 
 Besides the above, some minor refactoring was done to make the logging more intuitive and the camera is now oriented based on the center of mass. To illustrate capacity of the code at current stage, see the gif below:
+
 ![Demo GIF](POC5-03-2026.gif)
 
 ### Notes (19/02/26)
