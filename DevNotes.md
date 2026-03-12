@@ -48,7 +48,7 @@ The below gif gives a pretty good idea (taken from wiki) of the algorithm. In es
 ![Demo GIF](Spatial_quadtree_structure_of_the_Barnes-Hut_algorithm_in_the_N-body_problem.gif)
 
 ### Notes (08/02/26)
-Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. 
+Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. The biggest time save is to make debugging (e.g. calculation of momentum, energy) user toggleable with a flag instead of the default, second biggest being conversion of high_prec back to double (turns out having 1e-16 is sufficient accuracy) and third better usage of pointers. Some more minor but still significant time savings were made by removing redundant operations and reducing redeclaring variables which did not serve a purpose.
 
 This allows some more complex simulations. For evidence, see proofofconcept01-02-2026.gif
 ![Demo GIF](proofofconcept01-02-2026.gif)
