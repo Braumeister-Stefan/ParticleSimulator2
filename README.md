@@ -114,7 +114,10 @@ Lessons Learned (01/02/26).
 
 As I realised the time commitment combined with the little progress over the last year was starting to drag on me, I decided to look for a freelancer on Fiverr platform. This gave mixed results, but overall I think it was a valuable experience (hired help twice). Success is fully defined by how good instructions are and its not always easy to come up with a clear statement of work. For an overview of my approach in managing Fiverr Freelancers, See the readme on https://github.com/Braumeister-Stefan/ParticleSimulator2/tree/Fiverr_branch2 and the statements of work (SOW) on that branch for phase 1 & 2.
 
-Looking back, I spent hundreds of hours on this project, which gave me a lot of learning but I should be aware of the opportunity costs as well. A weekend spent on (a small fraction of) this project means a weekend I can't develop something else, work on my health or follow a course. I want to at least work out the most obvious computational inefficiencies, and create a cool capstone scenario to demonstrate the result of my work. After that, I need to pause and think of the pros/cons whether I continue with implementing a quadcore or call it a wrap and move on to something else.
+
+After working on and off for the last 4 months on this project, I managed to get inelastic collissions working, so that particles behave in a physically realistic way (clumping together while retaining linear and angular momentum) and converting KE to heat, which shows visually as particles brightening. An issue I was not able to solve is that seemingly, energy is created from nothing. I will take a break (though not abandon just yet) from this project to focus on my mathematics learning (MST125 at Open University) and perhaps start another python/c++ sideproject. 
+
+Looking back, I spent hundreds of hours on this project, which gave me a lot of learning but I should be aware of the opportunity costs as well. A weekend spent on (a small fraction of) this project means a weekend I can't develop something else, work on my health or follow a course.
 
 Next Steps (01/02/26)
 
@@ -126,23 +129,19 @@ Minor:
 * Simulation outcomes can now be loaded as objects, which allows iterative construction of more complex objects. This is necessary to create multi-particle objects such as planets, as it is (in my understanding) an unsolved problem in mathematics how many smaller circles fit into a larger one, hence allowing gravity to do its work acts as a numerical solver to this packing problem. A change that would make this more useful is if I can edit the (system) velocities & positions of these objects in the same interface as for new objects. [DONE]
 
 
-### Next steps (25/1/25)
+### Notes (25/1/25)
 My best guesses is that the issue of increasing energy is that this has something to do with overlap resolution  An issue I was not able to solve is that seemingly, energy is created from nothing once particles are collided (leading to disintegration of the system). My best guesses is that this has something to do with overlap resolution 
 Possible next steps to look into a solution is to investigate why it seems that after some time a 2-body inelastic colliding system seems to converge and not build up additional energy. Another clue is that this convergence seems to happen much later when the timestep is smaller. I would guess that the way I correct for energy difference after geometrically separating particles has issues in the math. Two alternative things to explore is if the issue is numeral inaccuracy (particle structure is still double datatype even though calculations are almost all high_prec datatype) or a wrong order of overlap resolution, collission resolution and verlet integration. (see .PNG for illustration, note the initial drop is expected due to conversion of KE to HE).
 
-After working on and off for the last 4 months on this project, I managed to get inelastic collissions working, so that particles behave in a physically realistic way (clumping together while retaining linear and angular momentum) and converting KE to heat, which shows visually as particles brightening. An issue I was not able to solve is that seemingly, energy is created from nothing. I will take a break (though not abandon just yet) from this project to focus on my mathematics learning (MST125 at Open University) and perhaps start another python/c++ sideproject. 
+![Demo GIF](proofofconcept25-01-25.gif)
 
-### Next steps (29/9/24):
-*	Complex object rendering, Saving and retrieving from cache (conditional on cache param in scenario specified). Support for circle only is fine [DONE]
-        should include manual inputs into complex name groups "with group defined particles are rendered from the same complex object" to allow for easier user input. Satisfies the GUI criteria for the project. [DONE]
-        4/10: Would be nice to have GUI on 1/3 of screen and plot on 2/3 of screen.
-* Validation of momentum and kinetic energy conservation [DONE]
-* number of particles, fps tracker on the plot handled through the metrics and plotter classes [DONE]
+
 
 ### Notes (24/10/24): 
 * Lost 2 days of work due to a deleting some files. Managed to recover but teaches the valuable lesson to push small incremental changes to git instead of everything at once.
 * Currently able to simulate moderately complex (n=50, 5000 steps) simulations, limited to perfectly elastic conditions though.
-         * Proof of Concept gif is added to repo
+
+![Demo GIF](proofofconcept24-10-24.gif)
 * Math and physics needed to understand the current PhysEngine is not very high, but to come up with the right solution required multiple evenings of reading, youtube and use of LLMs.
 * Chatgpt-4o is a great tool, but will only provide the elementary building blocks once the problem & solution is clearly described. For future problems, it would be a good idea to take some time drawing out a problem and solution on paper first, before starting to generate code and incrementally improve it.
 * Some doubt on whether implementing quadtree method is 1) within scope of my skillset, 2) has sufficient pay off versus simpler efficiency increasing techniques (e.g. only checking for overlaps on nearby particles).
@@ -157,7 +156,29 @@ Next steps (24/10/24):
 * Saving of rendered simulations should only save down the 1/dt-th frames to make saving simulations less of a wait.
 * Gravitational attraction has a dampening factor (ɛ̝) that prevents division by (near zero). This needs to be made relative to the size of particles so as to allow smaller particles to function properly.
 * Inelastic (and partially inelastic) collissions need to be programmed. To my understanding this involves a transfer of kinetic energy to heat which needs to be programmed. Can be strictly visual for now, e.g. adding heat as a Particle property and linearly increasing r,g,b values on the plot based on its value.
-* Complex object "SPINNING CLOUD (name is WIP)" to be made, which is same as CIRCLE but with angular momentum. Needs to be tested so that it remains stable (for a certain mass) over time if not affected by external forces. This will allow me to make meaningfull scenarios which should push against the computational bounderies of an O(n2) method.
+* Complex object "SPINNING CLOUD (name is WIP)" to be made, which is same as CIRCLE but with angular momentum. Needs to be tested so that it remains stable (for a certain mass) over time if not affected by external forces. This will allow me to make meaningfull scenarios which should push against the computational bounderies of an O(n2) method. [DONE]
+
+### Notes (29/9/24):
+
+Complex object rendering, Saving and retrieving from cache (conditional on cache param in scenario specified). Support for circle only is fine [DONE] should include manual inputs into complex name groups "with group defined particles are rendered from the same complex object" to allow for easier user input. Satisfies the GUI criteria for the project. [DONE] 4/10: Would be nice to have GUI on 1/3 of screen and plot on 2/3 of screen.
+Validation of momentum and kinetic energy conservation
+number of particles, fps tracker on the plot handled through the metrics and plotter classes
+
+![Demo GIF](proofofconcept30-09-24.gif)
+
+Issues:
+When to use unique_ptr and when to use shared_ptr? I see the logic of pointers giving the benefit of clear memory allocation and deallocation. However, they require complex syntax. I will try to use them in computationally demanding parts of the code, but not simple ones such as reading and writing inputs.
+
+### Notes (25/9/24)
+I replicated the basic structure from ParticleSimulator1, though for 2D instead of 3D to simplify things. Proof of a simple gravity & kinetic system below:
+
+![Demo GIF](proofofconcept25-09-24.gif)
+
+Euler integration was inappropriate as it poorly worked with gravitational effects (it did fine for strictly linear kinetic only effects, which is why it was sufficient for ParticleSimulator1. In exchange, velocity verlet (https://en.wikipedia.org/wiki/Verlet_integration#Velocity_Verlet) is implemented, which has the added value of being symplectic, e.g. it has the benefit of time-reversability, a desirable property for physical systems according to the literature.
+
+
+
+
 
 
 
