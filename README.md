@@ -9,7 +9,6 @@ This project aims to improve upon the lessons learned from ParticleSimulator1. T
 ### Primary objectives
 
 *	Separate code in header and source files [Done]
-*	Use classes instead of structs - 29/9: Classes seem to differ mostly in access rights and are only usefull when I learn about inheritance and polymorphism. I will stick to structs for now. [Abandoned]
 *	Use smart pointers. Each particle should only be defined once.  [DONE]
 *	Implement a quadtree (store the O(n^n) design for comparison)  - [DONE] 
 ### Secondary objectives
