@@ -134,8 +134,17 @@ When to use unique_ptr and when to use shared_ptr? I see the logic of pointers g
 I decided to abandon my goal to use classes instead of structs. Classes seem to differ mostly in access rights and are only usefull when I learn about inheritance and polymorphism. I will stick to structs for now. [Abandoned]
 
 ### Notes (25/9/24)
-I replicated the basic structure from ParticleSimulator1, though for 2D instead of 3D to simplify things. Proof of a simple gravity & kinetic system below:
+I replicated the basic structure from ParticleSimulator1, though for 2D instead of 3D to simplify things. 
 
-![Demo GIF](Media/proofofconcept25-09-24.gif)
+The elements below are recycled from ParticleSimulator1, in accordance with the primary and secondary objectives:
+*	Kinetic Collission function (including detection, backtracking and resolution) [DONE]
+*	Complex object generation (sphere only is OK) (including storage of complex object) [DONE]
+*	GNUplot plotting engine [DONE]
+*	Kinetic energy, momentum, fps trackers [DONE]
 
 Euler integration was inappropriate as it poorly worked with gravitational effects (it did fine for strictly linear kinetic only effects, which is why it was sufficient for ParticleSimulator1. In exchange, velocity verlet (https://en.wikipedia.org/wiki/Verlet_integration#Velocity_Verlet) is implemented, which has the added value of being symplectic, e.g. it has the benefit of time-reversability, a desirable property for physical systems according to the literature.
+
+
+Proof of a simple gravity & kinetic system below:
+
+![Demo GIF](Media/proofofconcept25-09-24.gif)
