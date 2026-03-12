@@ -81,6 +81,10 @@ Besides the above, some minor refactoring was done to make the logging more intu
 ### Notes (14/02/26)
 This branch will focus on the implementation of Barnes-Hut approximation algorithm to reduce the complexity from O(n^2) to O(nlogn). Any results are to be carefully validated against BH_validationset scenario to evaluate speedup and error between the baseline and a BH quadtree. Proper logging of time and energy is set up to make this process more rigorous
 
+Wikipedia has an excellent overview of Barnes-Hut (https://en.wikipedia.org/wiki/Barnes%E2%80%93Hut_simulation)
+The below gif gives a pretty good idea (taken from wiki) of the algorithm. In essence, for each particle, the gravitational interaction will be measured not against all other particles but against quadrants, with each quadrant having a aggregated center of mass (mass & location), and closer by quadrants being smaller than far away ones. 
+![Demo GIF](Spatial_quadtree_structure_of_the_Barnes-Hut_algorithm_in_the_N-body_problem.gif)
+
 ### Notes (08/02/26)
 Performance of the simulation is sped up 5000 times, which well exceeds the 5 times goal I set. Further simulation optimization would need to implement a quadtree and/or spatial grid for collission detection, which is the last goal I set at the beginning, so that's exciting. 
 
