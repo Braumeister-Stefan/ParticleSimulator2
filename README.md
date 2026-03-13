@@ -1,10 +1,22 @@
-# ParticleSimulator2 (2026)
+# ParticleSimulator2 (2026) - By Stephane Mertens de Wilmars (smdw1997@gmail.com)
 
 ## Project description
+ParticleSimulator2 is a 2D physics engine that supports Newtonian gravity and collissions for n-body systems. It's complexity is **O(nlogn)** through implementation of the Barnes-Hut approximation algorithm.
 
-This project aims to improve upon the lessons learned from ParticleSimulator1. The objective is to simulate in 2 dimensions, the kinetic and gravitational interactions of n spheroids in an optimized way.
+Below are some examples of simulations that are possible with this engine. These and more are stored in [Media](Media).
+### Planet Core Formation
+WIP
+### Simulation of Hydrogen Cloud Collapse
+WIP
+### Impact of a moon and a planet
+WIP
+### Stable rotation of a moon around a star 
+WIP
+
 
 ## Objectives
+I worked on this project to improve upon the lessons learned from ParticleSimulator1 and build a solid C++ foundation. 
+
 Below are the main objectives I set myself to reach before considering the project a success. After 1 year and 8 months, all objectives were reached. I tried to log my learning journey and the project evolution towards these objectives in [DevNotes](DevNotes.md).
 
 ### Primary objectives
@@ -22,7 +34,7 @@ Below are the main objectives I set myself to reach before considering the proje
 
 ## Project structure
 
-*	Main.cpp file
+*	Main.cpp: This is the main file from which the code runs. This is what you should build locally.
 
 Header files:
 * ObjHandler.h : this will contain all functionality in generating, saving and unpacking complex objects
@@ -43,6 +55,23 @@ Source files:
 * PhysMetrics.cpp
 * Particles.cpp
 * MathUtils.cpp
+
+## User Guide
+This section provides a rough guide for those willing to play around with the tool. I believe it could be of use for anyone developing space-based games in c++ or for undergraduate physics/compsci students. Happy to respond to any inquiries over email if there is interest.
+### First use
+
+### Logging system
+
+### Main Inputs
+All below inputs are accessible through scenario_inputs.csv and object_inputs.csv. To generate a new scenario/object, simply add a line with the desired inputs for your run.
+
+WIP
+### Further Inputs
+The below is a (not exhaustive) list of parameters that can be changed only by editing the code itself. This is advised only for those wishing to extend/tweak the project.
+
+### Limitations & Warnings
+WIP
+
 
 
 
