@@ -1,5 +1,5 @@
 # ParticleSimulator2 (2026)
-_By Stephane Mertens de Wilmars (smdw1997@gmail.com)_
+_By Braumeister Stefan (smdw1997@gmail.com)_
 
 ## Project description
 ParticleSimulator2 is a 2D physics engine that supports Newtonian gravity and collisions for n-body systems. Its complexity is **O(nlogn)** through implementation of the Barnes-Hut approximation algorithm.
