@@ -27,7 +27,7 @@ Below are some examples of simulations that are possible with this engine. These
 WIP
 ### Impact of a moon and a planet
 
-<img src="Media/proofofcojncept09-03-26.gif" width="800"/>
+<img src="Media/proofofconcept09-03-26.gif" width="800"/>
 
 ### Stable rotation of a moon around a star
 
