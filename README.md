@@ -23,8 +23,10 @@ Below are some examples of simulations that are possible with this engine. These
   </tr>
 </table>
 
-### Simulation of Hydrogen Cloud Collapse
-WIP
+### Simulation of Expanding Hydrogen Cloud 
+
+<img src="Media/hcloud.gif" width="800"/>
+
 ### Impact of a moon and a planet
 
 <img src="Media/proofofconcept09-03-26v2.gif" width="800"/>
